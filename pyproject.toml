@@ -1,0 +1,67 @@
+[build-system]
+requires = ["setuptools>=61.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hiepy"
+version = "0.1.0"
+description = "A comprehensive PyTorch framework for Hierarchical Tucker (HT) tensors."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [
+    { name = "Benedikt Schroeter", email = "b.schroeter@em.uni-frankfurt.de" }
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Mathematics",
+    "Programming Language :: Python :: 3.12",
+]
+
+# Core dependencies required to run your library
+dependencies = [
+    "torch>=2.0.0",
+]
+
+[project.optional-dependencies]
+# Dependencies needed only for development, linting, and testing
+dev = [
+    "pytest>=7.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0.0",
+]
+# Dependencies needed to build your documentation
+docs = [
+    "mkdocs>=1.5.0",
+    "mkdocs-material>=9.0.0",    
+    "mkdocstrings[python]>=0.24.0",
+    "pymdown-extensions>=10.0",   
+]
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["hiepy*", "hiepy_apps*"]
+
+[tool.ruff]
+# Target Python version and line-length
+target-version = "py312"
+line-length = 120
+
+[tool.ruff.lint]
+# E: pycodestyle errors, F: Pyflakes, ANN: Flake8-annotations (forces type hints)
+select = ["E", "F", "ANN"]
+
+[tool.ruff.lint.flake8-annotations]
+# Don't require type hints for 'self' or 'cls' in classes
+allow-star-arg-any = true
+suppress-none-returning = true
+
+[tool.mypy]
+# Configures Mypy static type checking
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true  # Forces you to write type hints for functions

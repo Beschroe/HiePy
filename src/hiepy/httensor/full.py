@@ -1,0 +1,67 @@
+"""HTTensor unfolding module.
+
+This module provides functionality to unfold a hierarchical Tucker tensor
+(HTTensor) into an explicit, dense PyTorch tensor (torch.Tensor).
+"""
+
+from __future__ import annotations
+
+import torch
+
+from hiepy.httensor.httensor import HTTensor as HTTensor
+from hiepy.linalg.matricize import dematricize, matricize
+from hiepy.linalg.mode_mul_torch import multi_mode_mul_torch
+
+
+def full(x: HTTensor) -> torch.Tensor:
+    r"""
+    Unfolds an HT  tensor into a dense torch tensor.
+
+    Parameters
+    ----------
+    x : HTTensor
+        Input HT tensor to be unfolded.
+
+    Returns
+    -------
+    torch.Tensor
+        The fully contracted, dense PyTorch tensor representing the explicit tensor coefficients.
+
+    Notes
+    -----
+    - The shape of the tensor is preserved.
+    - Unfolding destroys the linear scaling of the HT format. The storage requirement jumps from
+      $\mathcal{O}(dnr + dr^3)$ $\mathcal{O}(n^d)$, where $d$ is the number of dimensions, $n$ the maximum mode size,
+      and $r$ the maximum hierarchical rank.
+    Examples
+    --------
+    >>> import hiepy
+    >>> x = hiepy.ones(shape=(2, 2, 2))
+    >>> x_unfolded = hiepy.full(x)
+    >>> x_unfolded
+    tensor([[[1., 1.],
+            [1., 1.]],
+            [[1., 1.],
+            [1., 1.]]])
+    >>> type(x_unfolded)
+    <class 'torch.Tensor'>
+    """
+    # Restore leaf frames bottom-up
+    U = {}
+    for t in x.dtree.get_nodes(order="bottom-up"):
+        if x.dtree.is_leaf(t):
+            U[t] = x.U[t]
+
+        else:
+            left, right = x.dtree.get_children(t)
+
+            # Compute frame matrix
+            B_scaled = multi_mode_mul_torch(x=x.B[t], matrices={0: U[left], 1: U[right]})
+            U[t] = matricize(B_scaled, (0, 1))
+
+            # Free space
+            del U[left]
+            del U[right]
+
+    # Dematricise root frame matrix into tensor
+    return dematricize(U[x.dtree.root], x.shape, x.dtree.root)
