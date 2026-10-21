@@ -128,6 +128,8 @@ def truncate_gram(x: HTTensor, opts: TruncOpts) -> tuple[HTTensor, dict[Node, to
     error-based truncation.
     - The returned singular values correspond to those removed from the local
     subspaces during truncation.
+    - Gradients are propagated through the eigendecompositions of the reduced Gram matrices; they become unstable
+      for (nearly) equal singular values. The selected ranks are discrete and therefore not differentiated.
     - The truncation comes at an arithmetic cost of $\mathcal{O}(dnr^2 + dr^4)$, where $d$ is the number of dimensions,
     $r$ the maximum hierarchical rank, and $n$ the maximum mode size.
     - Typically less accurate than ``truncate_svd``.
@@ -227,6 +229,8 @@ def truncate_svd(x: HTTensor, opts: TruncOpts) -> tuple[HTTensor, dict[Node, tor
       error-based truncation.
     - The returned singular values correspond to those removed from the local
       subspaces during truncation.
+    - Gradients are propagated through ``torch.linalg.svd``; they become unstable for (nearly) equal singular
+      values. The selected ranks are discrete and therefore not differentiated.
     - The truncation comes at an arithmetic cost of $\mathcal{O}(dnr^2 + dr^4)$, where $d$ is the number of dimensions,
       $r$ the maximum hierarchical rank, and $n$ the maximum mode size.
     - This method is generally more numerically stable than the Gramian-based

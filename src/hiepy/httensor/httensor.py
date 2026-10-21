@@ -63,6 +63,9 @@ class HTTensor:
     - The memory requirement is given as $\mathcal{O}(dnr + dr^3)$, where $d$ is the tensor order, $n$ the maximum
       mode size, and $r$ the maximum hierarchical rank.
     - All components share one dtype and one device, available as ``x.dtype`` and ``x.device``.
+    - Gradients are tracked as in torch: operations record an autograd graph if and only if a component of an
+      input requires gradients (see ``requires_grad`` and ``requires_grad_``) and autograd is enabled. No
+      operation detaches implicitly; ``detach`` and ``copy`` cut the graph, ``torch.no_grad`` disables tracking.
     """
 
     def __init__(
@@ -110,6 +113,11 @@ class HTTensor:
 
         return _to(self, dtype=dtype, device=device)
 
+    def requires_grad_(self, requires_grad: bool = True) -> HTTensor:
+        from hiepy.factory.copy import requires_grad_ as _requires_grad_
+
+        return _requires_grad_(self, requires_grad=requires_grad)
+
     # ~~~~~~~~~~~~~~~~~~~~~~~~~ Getter ~~~~~~~~~~~~~~~~~~~~~~~~~
 
     @property
@@ -148,15 +156,21 @@ class HTTensor:
 
         return _device(self)
 
+    @property
+    def requires_grad(self) -> bool:
+        from hiepy.httensor.getter import requires_grad as _requires_grad
+
+        return _requires_grad(self)
+
     def norm(self) -> torch.Tensor:
         from hiepy.linalg.norm import norm as _norm
 
         return _norm(self)
 
-    def get(self, key: IndexKey | tuple[IndexKey, ...], track_grad: bool = False) -> HTTensor | torch.Tensor:
+    def get(self, key: IndexKey | tuple[IndexKey, ...]) -> HTTensor | torch.Tensor:
         from hiepy.httensor.get_item import get as _get
 
-        return _get(self, key, track_grad)
+        return _get(self, key)
 
     # ~~~~~~~~~~~~~~~~~~~~~~~~~ Reshape ~~~~~~~~~~~~~~~~~~~~~~~~~
     def full(self) -> torch.Tensor:
@@ -164,10 +178,10 @@ class HTTensor:
 
         return _full(self)
 
-    def squeeze(self, dims: list[int] | int | None = None, track_grad: bool = False) -> HTTensor | torch.Tensor:
+    def squeeze(self, dims: list[int] | int | None = None) -> HTTensor | torch.Tensor:
         from hiepy.transformation.squeeze import squeeze as _squeeze
 
-        return _squeeze(self, dims, track_grad)
+        return _squeeze(self, dims)
 
     # ~~~~~~~~~~~~~ Methods that modify the internal structure ~~~~~~~~~~~~~
     def orthog(self) -> HTTensor:

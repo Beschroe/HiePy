@@ -105,12 +105,8 @@ def randn(
             Q_B_t, _ = torch.linalg.qr(B_t, mode="reduced")
             B[t] = dematricize(Q_B_t, shape=(rl, rr, ranks[t]), t=(0, 1))
 
-        # Attach to autograd graph as leaves, if required
-    if requires_grad:
-        U = {leaf: tensor.detach().requires_grad_() for leaf, tensor in U.items()}
-        B = {node: tensor.detach().requires_grad_() for node, tensor in B.items()}
-
-    return HTTensor(U=U, B=B, dtree=dtree, is_orthog=True)
+    x = HTTensor(U=U, B=B, dtree=dtree, is_orthog=True)
+    return x.requires_grad_(requires_grad)
 
 
 # def randn(

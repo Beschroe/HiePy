@@ -71,7 +71,7 @@ def scalar_mul(x: HTTensor, c: ScalarType) -> HTTensor:
     if isinstance(c, torch.Tensor) and c.device.type != "cpu":
         check_device(x=x, c=c)
 
-    x = x.copy()
+    x = x.clone()
 
     # Extract root transfer tensor
     B_root = x.B[x.dtree.root]

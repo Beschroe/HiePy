@@ -17,7 +17,7 @@ from hiepy.transformation.squeeze import squeeze
 from hiepy.utils.data_types import IndexKey, Shape
 
 
-def get(x: HTTensor, key: IndexKey | tuple[IndexKey, ...], track_grad: bool = False) -> HTTensor | torch.Tensor:
+def get(x: HTTensor, key: IndexKey | tuple[IndexKey, ...]) -> HTTensor | torch.Tensor:
     r"""
     Indexes an HT tensor with ints and slices, following the semantics of torch indexing.
 
@@ -39,10 +39,6 @@ def get(x: HTTensor, key: IndexKey | tuple[IndexKey, ...], track_grad: bool = Fa
 
         Negative indices and slice bounds count from the end of the respective mode. Slice steps must
         be positive.
-
-    track_grad : bool, optional
-        If ``True``, the result stays connected to the autograd graph of ``x``. Otherwise, a detached
-        copy is returned. Defaults to ``False``.
 
     Returns
     -------
@@ -68,6 +64,7 @@ def get(x: HTTensor, key: IndexKey | tuple[IndexKey, ...], track_grad: bool = Fa
     Notes
     -----
     - The input tensor is not modified, and the result does not share memory with it.
+    - The result stays connected to the autograd graph of ``x``; use ``detach`` to cut it.
     - Advanced indexing (lists, index tensors, boolean masks), ``None`` and ``Ellipsis`` are not supported.
       In particular, ``x[[0, 1]]`` is rejected instead of being interpreted mode-wise; use ``x[0, 1]``.
     - Orthogonality is preserved only if ``key`` selects every entry of every mode.
@@ -112,7 +109,7 @@ def get(x: HTTensor, key: IndexKey | tuple[IndexKey, ...], track_grad: bool = Fa
             U[leaf] = x.U[leaf][entry, :]
             selects_all = False
 
-    # Shallow container; squeeze/copy/clone below create the independent result
+    # Shallow container; squeeze/clone below create the independent result
     z = HTTensor(U=U, B=x.B, dtree=x.dtree, is_orthog=x.is_orthog and selects_all)
 
     # HT tensors require at least two modes; smaller results are returned densely.
@@ -120,13 +117,12 @@ def get(x: HTTensor, key: IndexKey | tuple[IndexKey, ...], track_grad: bool = Fa
     nr_remaining_dims = len(shape) - len(removed_dims)
     if nr_remaining_dims < 2:
         out_shape = tuple(z.shape[dim] for dim in range(len(shape)) if dim not in removed_dims)
-        res = full(z).reshape(out_shape)
-        return res if track_grad else res.detach()
+        return full(z).reshape(out_shape)
 
     if removed_dims:
-        return squeeze(z, dims=removed_dims, track_grad=track_grad)
+        return squeeze(z, dims=removed_dims)
 
-    return z.clone() if track_grad else z.copy()
+    return z.clone()
 
 
 def _normalize_key(key: IndexKey | tuple[IndexKey, ...], shape: Shape) -> list[int | slice]:

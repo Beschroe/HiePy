@@ -227,3 +227,36 @@ def device(x: HTTensor) -> torch.device:
     device(type='cpu')
     """
     return x.B[x.dtree.get_root()].device
+
+
+def requires_grad(x: HTTensor) -> bool:
+    """
+    Returns whether HT tensor ``x`` participates in autograd.
+
+    Parameters
+    ----------
+    x : HTTensor
+        Input HT tensor.
+
+    Returns
+    -------
+    bool
+        ``True`` if at least one leaf matrix or transfer tensor of ``x`` requires gradients.
+
+    Notes
+    -----
+    - Gradients are tracked exactly as in torch: an operation records an autograd graph if and only if one of its
+      inputs requires gradients and autograd is enabled (see ``torch.no_grad``). No hiepy operation detaches
+      implicitly; use ``detach`` or ``copy`` to cut the graph.
+
+    Examples
+    --------
+    >>> import hiepy
+    >>> import torch
+    >>> torch.set_default_dtype(torch.float64)
+    >>> hiepy.requires_grad(hiepy.ones((2, 3, 4)))
+    False
+    >>> hiepy.requires_grad(hiepy.ones((2, 3, 4), requires_grad=True))
+    True
+    """
+    return any(t.requires_grad for t in (*x.U.values(), *x.B.values()))

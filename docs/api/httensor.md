@@ -6,6 +6,7 @@
 ::: hiepy.shape
 ::: hiepy.dtype
 ::: hiepy.device
+::: hiepy.requires_grad
 ::: hiepy.full
 ::: hiepy.get
 ::: hiepy.gramians

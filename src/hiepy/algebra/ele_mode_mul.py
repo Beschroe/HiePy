@@ -100,7 +100,7 @@ def ele_mode_mul(x: HTTensor, v: torch.Tensor, dim: int) -> HTTensor:
 
     check_device(x=x, v=v)
     dtype = result_dtype(x, v)
-    x = x.copy().to(dtype=dtype)
+    x = x.clone().to(dtype=dtype)
     v = v.to(dtype=dtype)
 
     # Update leaf matrix corresponding to dim

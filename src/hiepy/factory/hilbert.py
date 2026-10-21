@@ -96,9 +96,5 @@ def hilbert(
     B = {t: diagonal_tensor((R, R, R), fill_value=1.0, dtype=dtype, device=device) for t in dtree.get_inner_nodes()}
     B[dtree.get_root()] = torch.eye(R, R, dtype=dtype, device=device).unsqueeze(2)
 
-    # Attach to autograd graph as leaves, if required
-    if requires_grad:
-        U = {leaf: tensor.detach().requires_grad_() for leaf, tensor in U.items()}
-        B = {node: tensor.detach().requires_grad_() for node, tensor in B.items()}
-
-    return HTTensor(U=U, B=B, dtree=dtree, is_orthog=False)
+    x = HTTensor(U=U, B=B, dtree=dtree, is_orthog=False)
+    return x.requires_grad_(requires_grad)

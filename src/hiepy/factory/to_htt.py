@@ -47,6 +47,11 @@ def to_htt(x: torch.Tensor, opts: TruncOpts) -> HTTensor:
     ValueError
         If the input tensor ``x`` has fewer than 2 dimensions.
 
+    Notes
+    -----
+    - Gradients are propagated through ``torch.linalg.svd``; they become unstable for (nearly) equal singular
+      values. The selected ranks are discrete and therefore not differentiated.
+
     Examples
     --------
     >>> import torch

@@ -344,24 +344,23 @@ def test_repeated_indexing_matches_single_indexing():
 
 
 @pytest.mark.parametrize("key", [slice(1, 3), (0, slice(None)), (0, 1), (0, 1, 2)], ids=repr)
-def test_track_grad_connects_result_to_input(grad_enabled: None, key: Key):
+def test_result_is_connected_to_input(grad_enabled: None, key: Key):
     x = hiepy.randn((3, 4, 5), rank=2, requires_grad=True)
-    result = hiepy.get(x, key, track_grad=True)
-    # `full` keeps the autograd graph (unlike `norm`, which orthogonalizes via a detached copy)
+    result = x[key]
     scalar = result.full().sum() if isinstance(result, HTTensor) else result.sum()
     scalar.backward()
     assert any(u.grad is not None and torch.any(u.grad != 0) for u in x.U.values())
 
 
 @pytest.mark.parametrize("key", [slice(1, 3), (0, slice(None)), (0, 1), (0, 1, 2)], ids=repr)
-def test_without_track_grad_result_is_detached(grad_enabled: None, key: Key):
+def test_result_of_detached_input_does_not_require_grad(grad_enabled: None, key: Key):
     x = hiepy.randn((3, 4, 5), rank=2, requires_grad=True)
-    result = hiepy.get(x, key, track_grad=False)
+    result = x.detach()[key]
     tensors = list(result.U.values()) + list(result.B.values()) if isinstance(result, HTTensor) else [result]
     assert not any(t.requires_grad for t in tensors)
 
 
-def test_getitem_does_not_track_grad(grad_enabled: None):
-    x = hiepy.randn((3, 4, 5), rank=2, requires_grad=True)
-    result = x[0, 1]
-    assert not result.requires_grad
+def test_result_without_grad_input_does_not_require_grad(grad_enabled: None):
+    x = hiepy.randn((3, 4, 5), rank=2)
+    assert not x[0, 1].requires_grad
+    assert not x[0].requires_grad

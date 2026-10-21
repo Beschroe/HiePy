@@ -12,9 +12,7 @@ import torch
 from hiepy.httensor.httensor import HTTensor
 
 
-def squeeze(
-    x: HTTensor, dims: Iterable[SupportsInt] | SupportsInt | None = None, track_grad: bool = False
-) -> HTTensor | torch.Tensor:
+def squeeze(x: HTTensor, dims: Iterable[SupportsInt] | SupportsInt | None = None) -> HTTensor | torch.Tensor:
     r"""
     Removes singleton dimensions from input hierarchical Tucker tensor.
 
@@ -28,9 +26,6 @@ def squeeze(
         Input HT tensor.
     dims : Iterable[SupportsInt] | SupportsInt | None, optional
         Dimensions to remove. If None, all singleton dimensions are removed.
-
-    track_grad: bool
-        Indicates whether autograd connectivity should be preserved.
 
     Returns
     -------
@@ -93,7 +88,7 @@ def squeeze(
     while order - len(dims_set) < 2:
         dims_set.remove(max(dims_set))
 
-    x = x.clone() if track_grad else x.copy()
+    x = x.clone()
 
     if not dims_set:
         return x

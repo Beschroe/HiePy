@@ -66,7 +66,7 @@ def orthog(x: HTTensor) -> HTTensor:
     True
     """
 
-    x = x.copy()
+    x = x.clone()
 
     # Return if already orthog
     if x.is_orthog:

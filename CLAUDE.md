@@ -14,7 +14,7 @@ src/hiepy/
 ├── __init__.py          # Public API: re-exports every public function/class (see __all__)
 ├── httensor/            # The data structure and its read-only / structural accessors
 │   ├── httensor.py      # class HTTensor (U, B, dtree, is_orthog) + method/operator wrappers
-│   ├── getter.py        # order, rank, shape, nbytes, dtype, device
+│   ├── getter.py        # order, rank, shape, nbytes, dtype, device, requires_grad
 │   ├── get_item.py      # get / __getitem__ (torch-style int/slice indexing)
 │   ├── full.py          # full: HT -> dense torch.Tensor
 │   ├── gramians.py      # gramians: reduced Gram matrices of an orthogonal HT tensor
@@ -24,7 +24,7 @@ src/hiepy/
 │   ├── randn.py         # random orthogonal HT tensor with bounded rank
 │   ├── hilbert.py       # Hilbert tensor via sinc quadrature
 │   ├── to_htt.py        # dense torch.Tensor -> HT (hierarchical SVD)
-│   └── copy.py          # copy / clone / detach (autograd-aware copies), to (dtype/device conversion)
+│   └── copy.py          # copy / clone / detach (autograd-aware copies), to (dtype/device conversion), requires_grad_
 ├── algebra/             # Operations on HTTensors returning HTTensors (or scalars)
 │   ├── add.py, sub.py   # exact sum/difference via block-diagonal embedding
 │   ├── scalar_mul.py    # scaling via root transfer tensor
@@ -55,7 +55,8 @@ src/hiepy/
 
 Related top-level locations:
 
-- `tests/` — pytest suite: `test_get_item.py` (indexing), `test_dtype_device.py` (dtype/device rules);
+- `tests/` — pytest suite: `test_get_item.py` (indexing), `test_dtype_device.py` (dtype/device rules),
+  `test_autograd.py` (gradient tracking);
   `test.ipynb` is an exploratory notebook, not a test.
 - `docs/` + `mkdocs.yml` — MkDocs (material + mkdocstrings, NumPy docstring style). The pages in
   `docs/api/*.md` list the documented members **explicitly** (`::: hiepy.<name>`).
@@ -112,8 +113,8 @@ docstrings referenced in the functionality map below.
   dicts and copy at the end, as `get` does). Keep this invariant when adding operations.
 - `copy` = detached deep copy, `clone` = deep copy that stays in the autograd graph,
   `detach` = shares storage, cuts the graph (see `factory/copy.py`).
-- `get` and `squeeze` accept `track_grad` to choose between `clone` and `copy`. Note that
-  `orthog` (and everything calling it, e.g. `norm`) works on a detached `copy`.
+- Operations that start from a copy of their input use `x.clone()`, not `x.copy()`, so that the
+  result stays in the autograd graph (see "Autograd").
 
 ### Indexing (`get`, `x[...]`)
 
@@ -127,8 +128,18 @@ docstrings referenced in the functionality map below.
 
 - `import hiepy` has no global side effects; the torch defaults apply (default dtype `float32`,
   autograd enabled). There is no hiepy-level configuration object.
-- Factories accept `requires_grad`; gradients only flow if torch autograd is enabled
-  (see the `grad_enabled` fixture in `tests/test_get_item.py`).
+- Gradients are tracked exactly as in torch: an operation records a graph if and only if a component
+  of an input requires gradients and autograd is enabled. Default is no tracking (factories use
+  `requires_grad=False`); opt in via the factory argument or `x.requires_grad_()`, opt out via
+  `detach`/`copy` or `torch.no_grad()`. There is no per-function `track_grad` switch.
+- No operation detaches implicitly. Rules for implementations: no `.detach()`, `.copy()`, `.item()`,
+  `float(...)` on values that enter the result; no in-place changes of input components (writing
+  into freshly allocated buffers, as in `add`, is fine); discrete decisions such as ranks from
+  `trunc_rank` may be computed from detached values.
+- Gradients through `torch.linalg.svd`/`eigh` (`to_htt`, `truncate_*`, `local_left_svd`, `ele_mul`
+  with truncation) are unstable for (nearly) equal singular values.
+- `tests/test_autograd.py` checks propagation, absence of a graph and `gradcheck` for every operation;
+  add new operations to its `OPS` table.
 
 ### dtype and device
 
@@ -205,12 +216,13 @@ file.
 | `to_htt` | `factory/to_htt.py` | dense → HT via hierarchical SVD with `TruncOpts` (floating-point input only) |
 | `copy`, `clone`, `detach` | `factory/copy.py` | `.copy()`, `.clone()`, `.detach()` |
 | `to` | `factory/copy.py` | `.to(dtype, device)`; dtype/device conversion |
+| `requires_grad_` | `factory/copy.py` | `.requires_grad_(flag)`; sets the autograd flag on all components in place |
 
 ### Inspection and access (`httensor/`)
 
 | Name | File | Method / note |
 |---|---|---|
-| `order`, `shape`, `rank`, `nbytes`, `dtype`, `device` | `httensor/getter.py` | properties `.order`, `.shape`, `.rank`, `.nbytes`, `.dtype`, `.device` |
+| `order`, `shape`, `rank`, `nbytes`, `dtype`, `device`, `requires_grad` | `httensor/getter.py` | properties `.order`, `.shape`, `.rank`, `.nbytes`, `.dtype`, `.device`, `.requires_grad` |
 | `get` | `httensor/get_item.py` | `.get()`, `x[...]`; torch-style, see "Indexing" above |
 | `full` | `httensor/full.py` | `.full()`; dense reconstruction, exponential memory |
 | `gramians` | `httensor/gramians.py` | `.gramians()`; requires orthogonal input |

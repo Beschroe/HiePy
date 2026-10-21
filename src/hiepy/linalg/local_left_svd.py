@@ -64,6 +64,9 @@ def local_left_svd(x: HTTensor) -> dict[Node, tuple[torch.Tensor, torch.Tensor]]
       rather than via eigenvalues of $G_t = C_tC_t^\top$, avoiding the squaring of singular values and
       improving numerical robustness
 
+    - Gradients are propagated through ``torch.linalg.svd``; they become unstable for (nearly) equal singular
+      values.
+
     - The arithmetic complexity is $\mathcal{O}(dnr^2 + dr^4)$, where $d$ is the tensor order,
       $n$ the maximum mode size, and $r$ the maximum hierarchical rank.
 

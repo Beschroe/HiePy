@@ -90,7 +90,7 @@ def mode_mul(x: HTTensor, A: torch.Tensor, dim: int) -> HTTensor:
         )
     check_device(x=x, A=A)
     dtype = result_dtype(x, A)
-    x = x.copy().to(dtype=dtype)
+    x = x.clone().to(dtype=dtype)
     A = A.to(dtype=dtype)
 
     # Multiply the leaf matrix corresponding to the specified mode

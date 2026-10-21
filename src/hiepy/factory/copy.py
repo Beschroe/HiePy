@@ -181,3 +181,51 @@ def to(x: HTTensor, dtype: torch.dtype | None = None, device: torch.device | str
     U: TensorDict = {leaf: x.U[leaf].to(dtype=dtype, device=device) for leaf in dtree.get_leaves()}
     B: TensorDict = {t: x.B[t].to(dtype=dtype, device=device) for t in dtree.get_inner_nodes()}
     return HTTensor(U=U, B=B, dtree=dtree, is_orthog=x.is_orthog)
+
+
+def requires_grad_(x: HTTensor, requires_grad: bool = True) -> HTTensor:
+    """
+    Sets whether autograd records operations on the components of the HT tensor, in place.
+
+    Applies ``torch.Tensor.requires_grad_`` to every leaf matrix and transfer tensor of ``x``.
+
+    Parameters
+    ----------
+    x : HTTensor
+        Input HT tensor; modified in place.
+    requires_grad : bool, optional
+        Whether gradients are computed for the components of ``x``. Defaults to ``True``.
+
+    Returns
+    -------
+    HTTensor
+        The input ``x`` itself, to allow chaining.
+
+    Raises
+    ------
+    RuntimeError
+        If ``requires_grad`` is ``False`` and a component is not a leaf of the autograd graph, i.e. the result
+        of a tracked operation (raised by torch). Use ``detach`` instead.
+
+    Notes
+    -----
+    - The HT representation, the dimension tree and the orthogonality flag are unchanged.
+    - Components that are results of tracked operations already require gradients; setting the flag again has
+      no effect on them.
+
+    Examples
+    --------
+    >>> import hiepy
+    >>> import torch
+    >>> torch.set_default_dtype(torch.float64)
+    >>> x = hiepy.ones((2, 3, 4)).requires_grad_()
+    >>> x.requires_grad
+    True
+    >>> y = hiepy.norm(x)
+    >>> y.backward()
+    >>> x.U[(0,)].grad is not None
+    True
+    """
+    for t in (*x.U.values(), *x.B.values()):
+        t.requires_grad_(requires_grad)
+    return x

@@ -73,9 +73,5 @@ def zeros(
     U = {leaf: torch.zeros(shape[leaf[0]], 1, dtype=dtype, device=device) for leaf in dtree.get_leaves()}
     B = {t: torch.zeros(1, 1, 1, dtype=dtype, device=device) for t in dtree.get_inner_nodes()}
 
-    # Attach to autograd graph as leaves, if required
-    if requires_grad:
-        U = {leaf: tensor.detach().requires_grad_() for leaf, tensor in U.items()}
-        B = {node: tensor.detach().requires_grad_() for node, tensor in B.items()}
-
-    return HTTensor(U=U, B=B, dtree=dtree, is_orthog=False)
+    x = HTTensor(U=U, B=B, dtree=dtree, is_orthog=False)
+    return x.requires_grad_(requires_grad)

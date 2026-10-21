@@ -8,6 +8,8 @@
 
 ::: hiepy.detach
 
+::: hiepy.requires_grad_
+
 ::: hiepy.to
 
 ::: hiepy.ones
