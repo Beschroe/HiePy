@@ -21,13 +21,11 @@ import torch
 
 import hiepy
 from hiepy import HTTensor
+from tests.helpers import cuda
 
 SHAPE = (3, 4, 5)
 FLOAT_DTYPES = [torch.float32, torch.float64]
 MIXED_DTYPES = [(torch.float32, torch.float64), (torch.float64, torch.float32)]
-
-cuda = pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is not available")
-
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~ Helpers ~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -127,16 +125,12 @@ def test_to_changes_device():
     _assert_components(hiepy.to(_rand(torch.float32), device="meta"), torch.float32, "meta")
 
 
+@pytest.mark.usefixtures("grad_enabled")
 def test_to_keeps_autograd_graph():
-    previous = torch.is_grad_enabled()
-    torch.set_grad_enabled(True)
-    try:
-        x = hiepy.ones(SHAPE, dtype=torch.float32, requires_grad=True)
-        y = x.to(dtype=torch.float64)
-        y.B[y.dtree.get_root()].sum().backward()
-        assert x.B[x.dtree.get_root()].grad is not None
-    finally:
-        torch.set_grad_enabled(previous)
+    x = hiepy.ones(SHAPE, dtype=torch.float32, requires_grad=True)
+    y = x.to(dtype=torch.float64)
+    y.B[y.dtree.get_root()].sum().backward()
+    assert x.B[x.dtree.get_root()].grad is not None
 
 
 def test_save_load_map_location(tmp_path: pytest.TempPathFactory):

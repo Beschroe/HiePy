@@ -17,6 +17,7 @@ import torch
 import hiepy
 from hiepy import HTTensor
 from hiepy.utils.data_types import IndexKey
+from tests.helpers import assert_valid_structure, make_dense_htt
 
 type Key = IndexKey | tuple[IndexKey, ...]
 
@@ -24,13 +25,6 @@ ATOL = 1e-10
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~ Helpers and fixtures ~~~~~~~~~~~~~~~~~~~~~~~~~
-
-
-def _make(shape: tuple[int, ...], seed: int = 0) -> tuple[torch.Tensor, HTTensor]:
-    """Return a dense random tensor and its exact HT representation."""
-    gen = torch.Generator().manual_seed(seed)
-    dense = torch.randn(shape, generator=gen, dtype=torch.double)
-    return dense, hiepy.to_htt(dense, {"atol": 1e-13})
 
 
 def _assert_matches(result: HTTensor | torch.Tensor, expected: torch.Tensor) -> None:
@@ -45,29 +39,6 @@ def _assert_matches(result: HTTensor | torch.Tensor, expected: torch.Tensor) -> 
         dense = result
     assert dense.shape == expected.shape
     assert torch.allclose(dense, expected, atol=ATOL)
-
-
-def _assert_valid_structure(x: HTTensor) -> None:
-    """Check that the HT components are consistent with the dimension tree."""
-    leaves = x.dtree.get_leaves()
-    assert sorted(leaves) == [(i,) for i in range(x.order)]
-    assert set(x.U) == set(leaves)
-    assert set(x.B) == set(x.dtree.get_inner_nodes())
-    for t in x.dtree.get_inner_nodes():
-        left, right = x.dtree.get_children(t)
-        r_left = x.U[left].shape[1] if x.dtree.is_leaf(left) else x.B[left].shape[2]
-        r_right = x.U[right].shape[1] if x.dtree.is_leaf(right) else x.B[right].shape[2]
-        assert x.B[t].shape[:2] == (r_left, r_right)
-    assert x.B[x.dtree.get_root()].shape[2] == 1
-
-
-@pytest.fixture
-def grad_enabled():
-    """Enable autograd globally for one test and restore the previous state afterwards."""
-    previous = torch.is_grad_enabled()
-    torch.set_grad_enabled(True)
-    yield
-    torch.set_grad_enabled(previous)
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~ Agreement with dense torch indexing ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -113,7 +84,7 @@ KEYS_ORDER_3 = [
 
 @pytest.mark.parametrize("key", KEYS_ORDER_3, ids=repr)
 def test_matches_torch_order_3(key: Key):
-    dense, x = _make((3, 4, 5))
+    dense, x = make_dense_htt((3, 4, 5))
     _assert_matches(hiepy.get(x, key), dense[key])
 
 
@@ -134,22 +105,22 @@ KEYS_ORDER_5 = [
 @pytest.mark.parametrize("key", KEYS_ORDER_5, ids=repr)
 def test_matches_torch_order_5(key: Key):
     """Removing several modes at different tree positions restructures the tree correctly."""
-    dense, x = _make((2, 3, 2, 3, 2))
+    dense, x = make_dense_htt((2, 3, 2, 3, 2))
     result = hiepy.get(x, key)
     _assert_matches(result, dense[key])
     if isinstance(result, HTTensor):
-        _assert_valid_structure(result)
+        assert_valid_structure(result)
 
 
 @pytest.mark.parametrize("key", [0, -1, slice(1, 3), (0, 1), (slice(None), -1), (1, slice(None))], ids=repr)
 def test_matches_torch_order_2(key: Key):
-    dense, x = _make((3, 4))
+    dense, x = make_dense_htt((3, 4))
     _assert_matches(hiepy.get(x, key), dense[key])
 
 
 def test_all_entries_of_small_tensor():
     """Every single entry is accessible via positive and negative indices."""
-    dense, x = _make((2, 3, 2))
+    dense, x = make_dense_htt((2, 3, 2))
     for i in range(-2, 2):
         for j in range(-3, 3):
             for k in range(-2, 2):
@@ -168,7 +139,7 @@ def test_entry_example_from_docstring():
 
 @pytest.mark.parametrize("key", [1, -2, slice(0, 2), (0, -1), (slice(None), 1, -1)], ids=repr)
 def test_entry_points_agree(key: Key):
-    dense, x = _make((3, 4, 5))
+    dense, x = make_dense_htt((3, 4, 5))
     via_function = hiepy.get(x, key)
     via_method = x.get(key)
     via_getitem = x[key]
@@ -178,13 +149,13 @@ def test_entry_points_agree(key: Key):
 
 
 def test_getitem_with_comma_syntax():
-    dense, x = _make((3, 4, 5))
+    dense, x = make_dense_htt((3, 4, 5))
     _assert_matches(x[0, 1:3], dense[0, 1:3])
     _assert_matches(x[-1, :, -2], dense[-1, :, -2])
 
 
 def test_negative_index_equals_positive_counterpart():
-    _, x = _make((3, 4, 5))
+    _, x = make_dense_htt((3, 4, 5))
     assert torch.allclose(x[-1].full(), x[2].full())
     assert torch.allclose(x[:, -4].full(), x[:, 0].full())
     assert torch.allclose(x[-3, -4, -5], x[0, 0, 0])
@@ -192,7 +163,7 @@ def test_negative_index_equals_positive_counterpart():
 
 def test_index_like_integers_are_accepted():
     """Objects implementing __index__ (e.g. 0-d integer tensors) behave like ints."""
-    dense, x = _make((3, 4, 5))
+    dense, x = make_dense_htt((3, 4, 5))
     _assert_matches(x[torch.tensor(1)], dense[1])
     _assert_matches(x[torch.tensor(-1), 2], dense[-1, 2])
 
@@ -201,7 +172,7 @@ def test_index_like_integers_are_accepted():
 
 
 def test_length_one_slice_keeps_mode():
-    dense, x = _make((3, 4, 5))
+    dense, x = make_dense_htt((3, 4, 5))
     result = x[0:1]
     assert result.shape == (1, 4, 5)
     _assert_matches(result, dense[0:1])
@@ -209,7 +180,7 @@ def test_length_one_slice_keeps_mode():
 
 
 def test_untouched_singleton_modes_are_kept():
-    dense, x = _make((3, 1, 5))
+    dense, x = make_dense_htt((3, 1, 5))
     _assert_matches(x[1:3], dense[1:3])
     _assert_matches(x[()], dense[()])
     _assert_matches(x[(slice(None),)], dense[(slice(None),)])
@@ -218,7 +189,7 @@ def test_untouched_singleton_modes_are_kept():
 
 
 def test_order_one_result_is_dense_vector():
-    dense, x = _make((3, 4, 5))
+    dense, x = make_dense_htt((3, 4, 5))
     result = x[1, 2]
     assert isinstance(result, torch.Tensor) and not isinstance(result, HTTensor)
     assert result.shape == (5,)
@@ -226,7 +197,7 @@ def test_order_one_result_is_dense_vector():
 
 
 def test_order_zero_result_is_scalar_tensor():
-    dense, x = _make((3, 4, 5))
+    dense, x = make_dense_htt((3, 4, 5))
     result = x[1, 2, 3]
     assert isinstance(result, torch.Tensor) and result.ndim == 0
     _assert_matches(result, dense[1, 2, 3])
@@ -237,13 +208,13 @@ def test_order_zero_result_is_scalar_tensor():
 
 @pytest.mark.parametrize("key", [3, -4, (0, 4), (0, -5), (0, 0, 5), (slice(None), slice(None), -6)], ids=repr)
 def test_out_of_bounds_raises_index_error(key: Key):
-    _, x = _make((3, 4, 5))
+    _, x = make_dense_htt((3, 4, 5))
     with pytest.raises(IndexError, match="out of bounds"):
         hiepy.get(x, key)
 
 
 def test_too_many_indices_raise_index_error():
-    _, x = _make((3, 4, 5))
+    _, x = make_dense_htt((3, 4, 5))
     with pytest.raises(IndexError, match="Too many indices"):
         hiepy.get(x, (0, 0, 0, 0))
 
@@ -254,14 +225,14 @@ def test_too_many_indices_raise_index_error():
     ids=repr,
 )
 def test_unsupported_key_types_raise_type_error(key: object):
-    _, x = _make((3, 4, 5))
+    _, x = make_dense_htt((3, 4, 5))
     with pytest.raises(TypeError):
         hiepy.get(x, key)
 
 
 @pytest.mark.parametrize("key", [slice(None, None, 0), slice(None, None, -1), (slice(None), slice(3, 0, -1))], ids=repr)
 def test_non_positive_slice_step_raises_value_error(key: Key):
-    _, x = _make((3, 4, 5))
+    _, x = make_dense_htt((3, 4, 5))
     with pytest.raises(ValueError, match="step"):
         hiepy.get(x, key)
 
@@ -271,7 +242,7 @@ def test_non_positive_slice_step_raises_value_error(key: Key):
 
 @pytest.mark.parametrize("key", [0, slice(1, 3), (slice(None), 1), (0, 1), (0, 1, 2), ()], ids=repr)
 def test_input_is_not_modified(key: Key):
-    dense, x = _make((3, 4, 5))
+    dense, x = make_dense_htt((3, 4, 5))
     U_before = {t: u.clone() for t, u in x.U.items()}
     B_before = {t: b.clone() for t, b in x.B.items()}
     children_before = dict(x.dtree.children)
@@ -289,7 +260,7 @@ def test_input_is_not_modified(key: Key):
 
 @pytest.mark.parametrize("key", [slice(None), (), slice(1, 3), (slice(None), 1)], ids=repr)
 def test_result_shares_no_memory_with_input(key: Key):
-    _, x = _make((3, 4, 5))
+    _, x = make_dense_htt((3, 4, 5))
     result = hiepy.get(x, key)
     x_full_before = x.full().clone()
     for u in result.U.values():
@@ -301,7 +272,7 @@ def test_result_shares_no_memory_with_input(key: Key):
 
 
 def test_orthogonality_flag():
-    _, x = _make((3, 4, 5))
+    _, x = make_dense_htt((3, 4, 5))
     assert x.is_orthog
     # Selecting rows of an orthonormal leaf matrix destroys orthonormality
     assert x[1:3].is_orthog is False
@@ -314,10 +285,10 @@ def test_orthogonality_flag():
 @pytest.mark.parametrize("key", [slice(1, 3), (slice(None), 0), (0, slice(0, 2), slice(None)), (1, 2)], ids=repr)
 def test_result_supports_further_operations(key: Key):
     """The returned HT tensor is a valid HT tensor that downstream operations accept."""
-    dense, x = _make((3, 4, 5, 2))
+    dense, x = make_dense_htt((3, 4, 5, 2))
     result = hiepy.get(x, key)
     expected = dense[key]
-    _assert_valid_structure(result)
+    assert_valid_structure(result)
     assert torch.allclose(result.orthog().full(), expected, atol=ATOL)
     assert torch.allclose(result.norm(), torch.linalg.norm(expected), atol=ATOL)
     assert torch.allclose(hiepy.contract(result, result), torch.sum(expected * expected), atol=ATOL)
@@ -334,7 +305,7 @@ def test_indexing_a_non_canonical_tree():
 
 
 def test_repeated_indexing_matches_single_indexing():
-    dense, x = _make((3, 4, 5, 2))
+    dense, x = make_dense_htt((3, 4, 5, 2))
     _assert_matches(x[1][2], dense[1, 2])
     _assert_matches(x[:, 1:3][0], dense[0, 1:3])
     _assert_matches(x[-1][:, -1], dense[-1, :, -1])

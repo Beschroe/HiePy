@@ -6,7 +6,7 @@ requires gradients and autograd is enabled. No operation detaches implicitly.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator
+from collections.abc import Callable
 
 import pytest
 import torch
@@ -24,12 +24,8 @@ type Op = Callable[[HTTensor, HTTensor], Result]
 
 
 @pytest.fixture(autouse=True)
-def grad_enabled() -> Iterator[None]:
-    """Enable autograd globally for each test and restore the previous state afterwards."""
-    previous = torch.is_grad_enabled()
-    torch.set_grad_enabled(True)
-    yield
-    torch.set_grad_enabled(previous)
+def _autograd_on(grad_enabled: None) -> None:
+    """Run every test in this module with autograd enabled (fixture from ``conftest.py``)."""
 
 
 def _rand(seed: int, requires_grad: bool = False) -> HTTensor:
