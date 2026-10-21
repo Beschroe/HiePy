@@ -10,6 +10,7 @@ import torch
 
 from hiepy.httensor.httensor import HTTensor as HTTensor
 from hiepy.utils.data_types import ScalarType
+from hiepy.utils.dtype_device import check_device
 
 
 def scalar_mul(x: HTTensor, c: ScalarType) -> HTTensor:
@@ -32,8 +33,16 @@ def scalar_mul(x: HTTensor, c: ScalarType) -> HTTensor:
     HTTensor
         A new HT tensor representing the product $cX$.
 
+    Raises
+    ------
+    RuntimeError
+        If ``c`` is a tensor that is neither on the device of ``x`` nor on the CPU.
+
     Notes
     -----
+    - The result dtype follows torch's type promotion for scalars: Python scalars and zero-dimensional tensors
+      do not raise the dtype of ``x`` (e.g. a ``float32`` tensor scaled by a ``float64`` scalar stays ``float32``).
+    - As in torch, a zero-dimensional ``c`` on the CPU may be combined with ``x`` on any device.
     - The dimension tree is preserved.
     - The hierarchical ranks are preserved.
     - The tensor shape is preserved.
@@ -47,25 +56,30 @@ def scalar_mul(x: HTTensor, c: ScalarType) -> HTTensor:
     Examples
     --------
     >>> import hiepy
+    >>> import torch
+    >>> torch.set_default_dtype(torch.float64)
     >>> x = hiepy.ones((2,2,2))
     >>> x = hiepy.scalar_mul(x=x,c=3.0)
     >>> print(x.full())
     tensor([[[3., 3.],
-         [3., 3.]],
-        [[3., 3.],
-         [3., 3.]]])
+             [3., 3.]],
+    <BLANKLINE>
+            [[3., 3.],
+             [3., 3.]]])
     """
     # Create copy of x
+    if isinstance(c, torch.Tensor) and c.device.type != "cpu":
+        check_device(x=x, c=c)
+
     x = x.copy()
 
     # Extract root transfer tensor
     B_root = x.B[x.dtree.root]
 
-    # (Cast c to tensor)
-    if not isinstance(c, torch.Tensor):
-        c = torch.tensor(c, dtype=B_root.dtype)
+    # Cast c to a tensor following torch's type promotion for scalars
+    c = torch.as_tensor(c, dtype=torch.result_type(B_root, c), device=B_root.device)
 
     # Scale root transfer tensor by c
-    x.B[x.dtree.root] = B_root * c
+    x.B[x.dtree.root] = B_root.to(dtype=c.dtype) * c
 
     return x

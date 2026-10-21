@@ -65,7 +65,7 @@ def trunc_rank(
 
     # compute truncation errors
     tail_norm = torch.sqrt(torch.cumsum(singular_values.flip(0) ** 2, dim=0)).flip(0)
-    tail_norm = torch.cat([tail_norm, torch.zeros(1)])
+    tail_norm = torch.cat([tail_norm, tail_norm.new_zeros(1)])
 
     # compute required rank
     rank = max(int(torch.where(tail_norm <= tol)[0][0]), 1)  # for the case, where no entry is

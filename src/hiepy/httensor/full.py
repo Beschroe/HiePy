@@ -36,13 +36,16 @@ def full(x: HTTensor) -> torch.Tensor:
     Examples
     --------
     >>> import hiepy
+    >>> import torch
+    >>> torch.set_default_dtype(torch.float64)
     >>> x = hiepy.ones(shape=(2, 2, 2))
     >>> x_unfolded = hiepy.full(x)
     >>> x_unfolded
     tensor([[[1., 1.],
-            [1., 1.]],
+             [1., 1.]],
+    <BLANKLINE>
             [[1., 1.],
-            [1., 1.]]])
+             [1., 1.]]])
     >>> type(x_unfolded)
     <class 'torch.Tensor'>
     """

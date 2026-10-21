@@ -54,7 +54,7 @@ def gramians(x: HTTensor) -> dict[Node, torch.Tensor]:
         raise ValueError("Argument ``x`` is not an orthogonal HTTensor.")
 
     # Dictionary for reduced Gramians, root is identity by definition
-    G = {x.dtree.get_root(): torch.ones(1, 1)}
+    G = {x.dtree.get_root(): torch.ones(1, 1, dtype=x.dtype, device=x.device)}
 
     # Traverse the dimension tree top-down
     # Compute reduced Gramians at each node

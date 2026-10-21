@@ -10,6 +10,7 @@ from __future__ import annotations
 import torch
 
 from hiepy.httensor.httensor import HTTensor as HTTensor
+from hiepy.utils.dtype_device import check_device, result_dtype
 
 
 def ele_mode_mul(x: HTTensor, v: torch.Tensor, dim: int) -> HTTensor:
@@ -50,8 +51,12 @@ def ele_mode_mul(x: HTTensor, v: torch.Tensor, dim: int) -> HTTensor:
     ValueError
         If the length of ```v``` does not match the size of the selected mode.
 
+    RuntimeError
+        If ``x`` and ``v`` live on different devices.
+
     Notes
     -----
+    - The result has the promoted dtype of ``x`` and ``v`` (e.g. ``float32`` and ``float64`` give ``float64``).
     - The dimension tree is preserved.
     - Hierarchical ranks are preserved.
     - Orthogonality is not preserved.
@@ -63,23 +68,25 @@ def ele_mode_mul(x: HTTensor, v: torch.Tensor, dim: int) -> HTTensor:
     --------
     >>> import torch
     >>> import hiepy
-    >>> x = torch.arange(24, dtype=torch.double).reshape(2,3,4)
-    >>> x_ht = hiepy.to_htt(x,{"atol":1e-12})
+    >>> torch.set_default_dtype(torch.float64)
+    >>> x_ht = hiepy.arange((2, 3, 4))
     >>> x_ht.full()
     tensor([[[ 0.,  1.,  2.,  3.],
-         [ 4.,  5.,  6.,  7.],
-         [ 8.,  9., 10., 11.]],
-        [[12., 13., 14., 15.],
-         [16., 17., 18., 19.],
-         [20., 21., 22., 23.]]])
+             [ 4.,  5.,  6.,  7.],
+             [ 8.,  9., 10., 11.]],
+    <BLANKLINE>
+            [[12., 13., 14., 15.],
+             [16., 17., 18., 19.],
+             [20., 21., 22., 23.]]])
     >>> v = torch.arange(3)
     >>> hiepy.ele_mode_mul(x_ht,v,dim=1).full()
     tensor([[[ 0.,  0.,  0.,  0.],
-         [ 4.,  5.,  6.,  7.],
-         [16., 18., 20., 22.]],
-        [[ 0.,  0.,  0.,  0.],
-         [16., 17., 18., 19.],
-         [40., 42., 44., 46.]]])
+             [ 4.,  5.,  6.,  7.],
+             [16., 18., 20., 22.]],
+    <BLANKLINE>
+            [[ 0.,  0.,  0.,  0.],
+             [16., 17., 18., 19.],
+             [40., 42., 44., 46.]]])
     """
     # Validity checks
     if v.ndim != 1:
@@ -91,7 +98,10 @@ def ele_mode_mul(x: HTTensor, v: torch.Tensor, dim: int) -> HTTensor:
             f"Mismatch between dimension {dim} of x (size {x.shape[dim]}) and length of v (size {v.shape[0]})."
         )
 
-    x = x.copy()
+    check_device(x=x, v=v)
+    dtype = result_dtype(x, v)
+    x = x.copy().to(dtype=dtype)
+    v = v.to(dtype=dtype)
 
     # Update leaf matrix corresponding to dim
     node = (dim,)

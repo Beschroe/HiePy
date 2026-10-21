@@ -68,6 +68,7 @@ def mode_mul_torch(x: torch.Tensor, A: torch.Tensor, dim: Sequence[int] | int) -
     --------
     >>> import torch
     >>> import hiepy
+    >>> torch.set_default_dtype(torch.float64)
     >>> x = torch.randn(2, 3, 4, 5)
     >>> # Contract modes 1 and 3 (sizes 3 and 5 -> combined size 15)
     >>> A = torch.randn(10, 15)
@@ -173,6 +174,7 @@ def multi_mode_mul_torch(x: torch.Tensor, matrices: dict[int, torch.Tensor]) -> 
     --------
     >>> import hiepy
     >>> import torch
+    >>> torch.set_default_dtype(torch.float64)
     >>> x = torch.randn((3, 4, 5))
     >>> matrices = {0: torch.randn(2, 3), -1: torch.randn(6, 5)}
     >>> res = hiepy.multi_mode_mul_torch(x, matrices)

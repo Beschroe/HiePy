@@ -7,6 +7,8 @@ of HT tensors with different levels of autograd coupling.
 
 from __future__ import annotations
 
+import torch
+
 from hiepy.httensor.httensor import HTTensor as HTTensor
 from hiepy.utils.data_types import TensorDict
 
@@ -39,6 +41,7 @@ def clone(x: HTTensor) -> HTTensor:
     --------
     >>> import hiepy
     >>> import torch
+    >>> torch.set_default_dtype(torch.float64)
     >>> x = hiepy.ones(shape=(2,3,4,5))
     >>> x_clone = hiepy.clone(x)
     >>> torch.allclose(x_clone.full(), x.full())
@@ -81,6 +84,7 @@ def detach(x: HTTensor) -> HTTensor:
     --------
     >>> import hiepy
     >>> import torch
+    >>> torch.set_default_dtype(torch.float64)
     >>> x = hiepy.ones(shape=(2,3,4,5))
     >>> x_detached = hiepy.detach(x)
     >>> x_detached.U[(0,)].requires_grad
@@ -122,6 +126,7 @@ def copy(x: HTTensor) -> HTTensor:
     --------
     >>> import hiepy
     >>> import torch
+    >>> torch.set_default_dtype(torch.float64)
     >>> x = hiepy.ones(shape=(2,3,4,5))
     >>> x_copy = hiepy.copy(x)
     >>> torch.allclose(x_copy.full(), x.full())
@@ -132,4 +137,47 @@ def copy(x: HTTensor) -> HTTensor:
     dtree = x.dtree.copy()
     U: TensorDict = {leaf: x.U[leaf].detach().clone() for leaf in dtree.get_leaves()}
     B: TensorDict = {t: x.B[t].detach().clone() for t in dtree.get_inner_nodes()}
+    return HTTensor(U=U, B=B, dtree=dtree, is_orthog=x.is_orthog)
+
+
+def to(x: HTTensor, dtype: torch.dtype | None = None, device: torch.device | str | None = None) -> HTTensor:
+    """
+    Converts the HT tensor to another dtype and/or device.
+
+    Applies ``torch.Tensor.to`` to every leaf matrix and transfer tensor, analogous to ``torch.Tensor.to``.
+
+    Parameters
+    ----------
+    x : HTTensor
+        Input HT tensor.
+    dtype : torch.dtype, optional
+        Target dtype. If ``None``, the dtype of ``x`` is kept.
+    device : torch.device | str, optional
+        Target device. If ``None``, the device of ``x`` is kept.
+
+    Returns
+    -------
+    HTTensor
+        HT tensor with the same values as ``x`` (up to rounding) and the requested dtype and device.
+
+    Notes
+    -----
+    - The dimension tree and the hierarchical ranks are preserved.
+    - The orthogonality flag is preserved, since a conversion changes orthogonality only within rounding accuracy.
+    - Gradient tracking is preserved for all tensor components.
+    - As with ``torch.Tensor.to``, components whose dtype and device already match are shared with ``x``, not
+      copied. Use ``copy`` or ``clone`` for independent storage.
+
+    Examples
+    --------
+    >>> import hiepy
+    >>> import torch
+    >>> torch.set_default_dtype(torch.float64)
+    >>> x = hiepy.ones((2, 3, 4), dtype=torch.float32)
+    >>> hiepy.to(x, dtype=torch.float64).dtype
+    torch.float64
+    """
+    dtree = x.dtree.copy()
+    U: TensorDict = {leaf: x.U[leaf].to(dtype=dtype, device=device) for leaf in dtree.get_leaves()}
+    B: TensorDict = {t: x.B[t].to(dtype=dtype, device=device) for t in dtree.get_inner_nodes()}
     return HTTensor(U=U, B=B, dtree=dtree, is_orthog=x.is_orthog)

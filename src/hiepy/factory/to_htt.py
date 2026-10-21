@@ -52,6 +52,7 @@ def to_htt(x: torch.Tensor, opts: TruncOpts) -> HTTensor:
     >>> import torch
     >>> import hiepy
     >>> from math import prod
+    >>> torch.set_default_dtype(torch.float64)
     >>> shape = 3,4,5,6,7
     >>> x = torch.arange(prod(shape),dtype=torch.double).reshape(shape)
     >>> x.shape

@@ -80,6 +80,7 @@ def get(x: HTTensor, key: IndexKey | tuple[IndexKey, ...], track_grad: bool = Fa
     --------
     >>> import hiepy
     >>> import torch
+    >>> torch.set_default_dtype(torch.float64)
     >>> x = torch.arange(1, 28, dtype=torch.double).reshape(3, 3, 3)
     >>> x_ht = hiepy.to_htt(x, {"atol": 1e-8})
     >>> hiepy.get(x_ht, (slice(0, 2), slice(0, 2))).shape

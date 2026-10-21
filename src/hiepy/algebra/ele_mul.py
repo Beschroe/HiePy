@@ -14,6 +14,7 @@ import torch
 from hiepy.httensor.httensor import HTTensor as HTTensor
 from hiepy.linalg.left_svd_gramian import left_svd_gramian
 from hiepy.utils.data_types import TruncOpts
+from hiepy.utils.dtype_device import check_device, result_dtype
 from hiepy.utils.trunc_rank import trunc_rank
 
 
@@ -59,6 +60,9 @@ def ele_mul(x: HTTensor, y: HTTensor, opts: TruncOpts = {}) -> HTTensor:
         If the dimension trees are incompatible, or if the full tensor
         shapes do not match.
 
+    RuntimeError
+        If ``x`` and ``y`` live on different devices.
+
     Warns
     -----
     UserWarning
@@ -66,6 +70,7 @@ def ele_mul(x: HTTensor, y: HTTensor, opts: TruncOpts = {}) -> HTTensor:
 
     Notes
     -----
+    - The result has the promoted dtype of ``x`` and ``y`` (e.g. ``float32`` and ``float64`` give ``float64``).
     - The dimension tree is preserved.
     - Without truncation, rank growth is multiplicative:
         $r_t^{out} = r_t^x \cdot r_t^y$
@@ -83,6 +88,7 @@ def ele_mul(x: HTTensor, y: HTTensor, opts: TruncOpts = {}) -> HTTensor:
     --------
     >>> import hiepy
     >>> import torch
+    >>> torch.set_default_dtype(torch.float64)
     >>> shape = 3, 3, 3
     >>> x = torch.ones(shape,dtype=torch.double)
     >>> y = torch.arange(1,28, dtype=torch.double).reshape(3,3,3)
@@ -94,7 +100,7 @@ def ele_mul(x: HTTensor, y: HTTensor, opts: TruncOpts = {}) -> HTTensor:
     {(0, 1, 2): 1, (0,): 2, (1,): 2, (2,): 2, (0, 1): 2}
     >>> rel_err = torch.linalg.norm(prod_torch-prod_ht.full()) / torch.linalg.norm(prod_torch)
     >>> rel_err
-    tensor(6.5401e-16)
+    tensor(6.8152e-16)
     >>> prod_ht = hiepy.ele_mul(x_ht,y_ht,opts={"max_rank":1})
     >>> prod_ht.rank
     {(0, 1, 2): 1, (0,): 1, (1,): 1, (2,): 1, (0, 1): 1}
@@ -107,6 +113,9 @@ def ele_mul(x: HTTensor, y: HTTensor, opts: TruncOpts = {}) -> HTTensor:
         raise ValueError("Dimension trees of 'x' and 'y' are not compatible")
     if x.shape != y.shape:
         raise ValueError(f"Shape of 'y' {y.shape} does not match shape of 'x' {x.shape}")
+    check_device(x=x, y=y)
+    dtype = result_dtype(x, y)
+    x, y = x.to(dtype=dtype), y.to(dtype=dtype)
 
     # Adjust error tolerances in opts.
     # To guarantee a global error bound e, the local truncation error per node

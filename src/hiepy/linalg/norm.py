@@ -27,6 +27,8 @@ def norm(x: HTTensor) -> torch.Tensor:
     Examples
     --------
     >>> import hiepy
+    >>> import torch
+    >>> torch.set_default_dtype(torch.float64)
     >>> shape = (2,2,2)
     >>> x = hiepy.ones(shape)
     >>> hiepy.norm(x)

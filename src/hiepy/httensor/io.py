@@ -44,7 +44,7 @@ def save(x: HTTensor, path: str | Path) -> None:
     torch.save(x, path)
 
 
-def load(path: str | Path) -> HTTensor:
+def load(path: str | Path, map_location: torch.device | str | None = None) -> HTTensor:
     r"""
     Deserializes an HT  tensor from disk.
 
@@ -52,6 +52,9 @@ def load(path: str | Path) -> HTTensor:
     ----------
     path : str | Path
         Path to a file previously created using `save`.
+    map_location : torch.device | str, optional
+        Device to load all tensor components onto. If ``None``, the components are restored on the device they were
+        saved from.
 
     Returns
     -------
@@ -71,4 +74,4 @@ def load(path: str | Path) -> HTTensor:
         path = str(path.resolve())
     if not path.endswith(".htt"):
         raise ValueError(f"Argument `path` must end with '.htt', got {path}.")
-    return torch.load(path, weights_only=False)
+    return torch.load(path, map_location=map_location, weights_only=False)

@@ -29,7 +29,7 @@ from .algebra.scalar_mul import scalar_mul
 from .algebra.sub import sub
 from .factory.arange import arange
 from .factory.constant import constant
-from .factory.copy import clone, copy, detach
+from .factory.copy import clone, copy, detach, to
 from .factory.hilbert import hilbert
 from .factory.ones import ones
 from .factory.randn import randn
@@ -37,7 +37,7 @@ from .factory.to_htt import to_htt
 from .factory.zeros import zeros
 from .httensor.full import full
 from .httensor.get_item import get
-from .httensor.getter import nbytes, order, rank, shape
+from .httensor.getter import device, dtype, nbytes, order, rank, shape
 from .httensor.gramians import gramians
 from .httensor.httensor import HTTensor
 from .httensor.io import load, save
@@ -55,8 +55,9 @@ from .utils.dimtree import DimTree, Node
 from .utils.trunc_rank import trunc_rank
 
 __all__ = [
-    "config",
     "nbytes",
+    "dtype",
+    "device",
     "order",
     "rank",
     "shape",
@@ -104,4 +105,5 @@ __all__ = [
     "clone",
     "copy",
     "detach",
+    "to",
 ]

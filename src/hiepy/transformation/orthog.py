@@ -18,8 +18,8 @@ def orthog(x: HTTensor) -> HTTensor:
     Orthogonalizes an HT tensor.
 
     An HT tensor is called orthogonal if all of its frame matrices $U_t$ have orthonormal columns, i.e.
-    $U_t^\top U_t = I{_{r_t}}$. Here $I{_{r_t}}$ denotes an $r_t \times r_t$ identity matrix, where $r_t$ is the hierarchical
-    rank at node $t$.
+    $U_t^\top U_t = I{_{r_t}}$. Here $I{_{r_t}}$ denotes an $r_t \times r_t$ identity matrix, where $r_t$ is the
+    hierarchical rank at node $t$.
 
     The orthogonalization is performed bottom-up along the dimension tree by successive QR decompositions and
     the propagation of the resulting triangular factors towards the root.
@@ -47,6 +47,7 @@ def orthog(x: HTTensor) -> HTTensor:
     --------
     >>> import hiepy
     >>> import torch
+    >>> torch.set_default_dtype(torch.float64)
     >>> x = hiepy.arange(shape=(8, 8, 8))
     >>> x.is_orthog
     False

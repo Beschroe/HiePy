@@ -69,6 +69,8 @@ def truncate(x: HTTensor, opts: TruncOpts, method: str = "svd") -> tuple[HTTenso
     Examples
     --------
     >>> import hiepy
+    >>> import torch
+    >>> torch.set_default_dtype(torch.float64)
     >>> shape = 10,10,10
     >>> x = hiepy.ones(shape)
     >>> x = hiepy.add(hiepy.add(x,x),x)
@@ -79,7 +81,7 @@ def truncate(x: HTTensor, opts: TruncOpts, method: str = "svd") -> tuple[HTTenso
     >>> x_appr.rank
     {(0, 1, 2): 1, (0,): 1, (1,): 1, (2,): 1, (0, 1): 1}
     >>> hiepy.norm(x-x_appr) / hiepy.norm(x)
-    tensor(6.6500e-16)
+    tensor(7.0891e-16)
     """
     if method == "gram":
         return truncate_gram(x, opts)
@@ -255,8 +257,8 @@ def truncate_svd(x: HTTensor, opts: TruncOpts) -> tuple[HTTensor, dict[Node, tor
 
     # Phase 2: Compute projection matrices from root to leaves
     root = x.dtree.get_root()
-    W = {root: torch.eye(1)}
-    P = {root: torch.eye(1)}
+    W = {root: torch.eye(1, dtype=x.dtype, device=x.device)}
+    P = {root: torch.eye(1, dtype=x.dtype, device=x.device)}
 
     # Cutoff SVs
     SVs = {}

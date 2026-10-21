@@ -4,6 +4,8 @@
 ::: hiepy.order
 ::: hiepy.rank
 ::: hiepy.shape
+::: hiepy.dtype
+::: hiepy.device
 ::: hiepy.full
 ::: hiepy.get
 ::: hiepy.gramians

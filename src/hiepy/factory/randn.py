@@ -14,7 +14,12 @@ from hiepy.utils.dimtree import DimTree
 
 
 def randn(
-    shape: Shape, rank: int = 1, generator: torch.Generator | None = None, requires_grad: bool = False
+    shape: Shape,
+    rank: int = 1,
+    generator: torch.Generator | None = None,
+    dtype: torch.dtype | None = None,
+    device: torch.device | str | None = None,
+    requires_grad: bool = False,
 ) -> HTTensor:
     r"""
     Constructs an HT  tensor with random entries, a maximum hierarchical rank prescribed by ``rank``, and of
@@ -30,7 +35,11 @@ def randn(
         Defaults to 1.
     generator : torch.Generator, optional
         A pseudorandom number generator for sampling. Allows for reproducibility without modifying the
-        global PyTorch seed. Defaults to `None`.
+        global PyTorch seed. Its device must match ``device``. Defaults to `None`.
+    dtype : torch.dtype, optional
+        The dtype of the tensor components. Defaults to ``torch.get_default_dtype()``.
+    device : torch.device | str, optional
+        The device on which the tensor components are allocated. Defaults to ``torch.get_default_device()``.
     requires_grad: bool
         If `True`, the HT tensor components are attached to the autograd graph.
 
@@ -48,21 +57,24 @@ def randn(
     --------
     >>> import hiepy
     >>> import torch
+    >>> torch.set_default_dtype(torch.float64)
     >>> gen = torch.Generator().manual_seed(42)
     >>> # With reproducable results
     >>> x = hiepy.randn((2, 2, 2), rank=2, generator=gen)
     >>> x.full()
     tensor([[[ 1.1846,  0.5947],
-            [-0.5298, -0.3974]],
+             [-0.5298, -0.3974]],
+    <BLANKLINE>
             [[-0.5015,  0.5828],
-            [ 0.4290, -0.2628]]])
+             [ 0.4290, -0.2628]]])
     >>> # Without reproducable results
     >>> x = hiepy.randn((2, 2, 2), rank=2)
-    >>> x.full()
-    tensor([[[-0.0620,  0.0655],
-            [-0.1304,  0.1376]],
-            [[ 0.0281, -0.0297],
-            [ 0.0591, -0.0624]]])
+    >>> x.full()  # doctest: +SKIP
+    tensor([[[-0.3882, -0.7749],
+             [-0.9751,  1.0006]],
+    <BLANKLINE>
+            [[ 0.2644,  0.5182],
+             [ 0.5994, -0.5537]]])
     """
     order = len(shape)
     dtree = DimTree.from_order(order)
@@ -75,7 +87,7 @@ def randn(
     for leaf in dtree.get_leaves():
         n_t = shape[leaf[0]]
         ranks[leaf] = min(n_t, rank)
-        U_t = torch.randn(size=(n_t, ranks[leaf]), generator=generator)
+        U_t = torch.randn(size=(n_t, ranks[leaf]), generator=generator, dtype=dtype, device=device)
         U[leaf], _ = torch.linalg.qr(U_t, mode="reduced")
 
     # Construct transfer tensors
@@ -86,10 +98,10 @@ def randn(
         left, right = dtree.get_children(t)
         rl, rr = ranks[left], ranks[right]
         if dtree.is_root(t):
-            B[t] = torch.randn(size=(rl, rr, 1), generator=generator)
+            B[t] = torch.randn(size=(rl, rr, 1), generator=generator, dtype=dtype, device=device)
         else:
             ranks[t] = min(rl * rr, rank)
-            B_t = torch.randn(size=(rl * rr, ranks[t]), generator=generator)
+            B_t = torch.randn(size=(rl * rr, ranks[t]), generator=generator, dtype=dtype, device=device)
             Q_B_t, _ = torch.linalg.qr(B_t, mode="reduced")
             B[t] = dematricize(Q_B_t, shape=(rl, rr, ranks[t]), t=(0, 1))
 

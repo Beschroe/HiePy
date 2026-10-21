@@ -44,6 +44,7 @@ def matricize(x: torch.Tensor, t: Sequence[int]) -> torch.Tensor:
     --------
     >>> import torch
     >>> import hiepy
+    >>> torch.set_default_dtype(torch.float64)
     >>> x = torch.randn(3, 4, 5, 6)
     >>> hiepy.matricize(x, (0, 1)).shape
     torch.Size([12, 30])
@@ -110,6 +111,7 @@ def dematricize(A: torch.Tensor, shape: Shape, t: Sequence[int]) -> torch.Tensor
     --------
     >>> import torch
     >>> import hiepy
+    >>> torch.set_default_dtype(torch.float64)
     >>> shape = (2,3,4,5)
     >>> t = (1,3)
     >>> A = torch.randn(shape)

@@ -8,6 +8,7 @@ along a specified dimension/mode.
 import torch
 
 from hiepy.httensor.httensor import HTTensor as HTTensor
+from hiepy.utils.dtype_device import check_device, result_dtype
 
 
 def mode_mul(x: HTTensor, A: torch.Tensor, dim: int) -> HTTensor:
@@ -50,8 +51,12 @@ def mode_mul(x: HTTensor, A: torch.Tensor, dim: int) -> HTTensor:
     ValueError
         If the shapes of ``A`` and ``x`` don't match.
 
+    RuntimeError
+        If ``x`` and ``A`` live on different devices.
+
     Notes
     -----
+    - The result has the promoted dtype of ``x`` and ``A`` (e.g. ``float32`` and ``float64`` give ``float64``).
     - The dimension tree is preserved.
     - Hierarchical ranks are preserved.
     - Tensor shape is not preserved.
@@ -65,6 +70,7 @@ def mode_mul(x: HTTensor, A: torch.Tensor, dim: int) -> HTTensor:
     --------
     >>> import hiepy
     >>> import torch
+    >>> torch.set_default_dtype(torch.float64)
     >>> x = hiepy.randn((3,4,5))
     >>> A = torch.randn(2, 4)
     >>> res = hiepy.mode_mul(x=x, A=A, dim=1)
@@ -82,7 +88,10 @@ def mode_mul(x: HTTensor, A: torch.Tensor, dim: int) -> HTTensor:
             f"Mismatch between dimension {dim} of x (size {x.shape[dim]}) and number or columns of "
             f"A (size {A.shape[1]})."
         )
-    x = x.copy()
+    check_device(x=x, A=A)
+    dtype = result_dtype(x, A)
+    x = x.copy().to(dtype=dtype)
+    A = A.to(dtype=dtype)
 
     # Multiply the leaf matrix corresponding to the specified mode
     node = (dim,)

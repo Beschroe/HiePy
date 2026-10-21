@@ -8,6 +8,8 @@
 
 ::: hiepy.detach
 
+::: hiepy.to
+
 ::: hiepy.ones
 
 ::: hiepy.randn

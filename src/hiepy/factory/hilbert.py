@@ -38,9 +38,9 @@ def hilbert(
         Number of quadrature points used for the sinc-approximation. This
         directly determines the hierarchical rank $R = 2M + 1$. Default is 25.
     dtype : torch.dtype, optional
-        The desired data type of the tensor entries.
+        The dtype of the tensor components. Defaults to ``torch.get_default_dtype()``.
     device : torch.device | str, optional
-        The device on which the tensor leaves and transfer tensors are allocated.
+        The device on which the tensor components are allocated. Defaults to ``torch.get_default_device()``.
     requires_grad: bool
         If `True`, the HT tensor components are attached to the autograd graph.
 
@@ -63,6 +63,7 @@ def hilbert(
     --------
     >>> import torch
     >>> import hiepy
+    >>> torch.set_default_dtype(torch.float64)
     >>> shape = (20,20,20)
     >>> M = 20
     >>> x = hiepy.hilbert(shape, M)

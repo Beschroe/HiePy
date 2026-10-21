@@ -56,6 +56,7 @@ def squeeze(
     --------
     >>> import hiepy
     >>> import torch
+    >>> torch.set_default_dtype(torch.float64)
     >>> x = hiepy.randn(shape=(1, 8, 1, 8))
     >>> x.shape
     (1, 8, 1, 8)

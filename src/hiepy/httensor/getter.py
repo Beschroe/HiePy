@@ -5,6 +5,8 @@ Contains functions that return the order, rank, shape, etc. of a HTTensor.
 
 from __future__ import annotations
 
+import torch
+
 from hiepy.httensor.httensor import HTTensor as HTTensor
 from hiepy.utils.data_types import Node, Shape
 
@@ -28,6 +30,8 @@ def order(x: HTTensor) -> int:
     Examples
     --------
     >>> import hiepy
+    >>> import torch
+    >>> torch.set_default_dtype(torch.float64)
     >>> shape = (2,3,4,5)
     >>> x = hiepy.ones(shape)
     >>> hiepy.order(x)
@@ -79,6 +83,8 @@ def rank(x: HTTensor) -> dict[Node, int]:
     Examples
     --------
     >>> import hiepy
+    >>> import torch
+    >>> torch.set_default_dtype(torch.float64)
     >>> shape = (5,6,7)
     >>> x = hiepy.ones(shape)
     >>> hiepy.rank(x)
@@ -114,6 +120,8 @@ def shape(x: HTTensor) -> Shape:
     Examples
     --------
     >>> import hiepy
+    >>> import torch
+    >>> torch.set_default_dtype(torch.float64)
     >>> shape = (5,6,7,8)
     >>> x = hiepy.ones(shape)
     >>> hiepy.shape(x)
@@ -142,6 +150,8 @@ def nbytes(x: HTTensor) -> int:
     Examples
     --------
     >>> import hiepy
+    >>> import torch
+    >>> torch.set_default_dtype(torch.float64)
     >>> shape = (10,10,10)
     >>> x = hiepy.randn(shape, rank=1)
     >>> hiepy.nbytes(x)
@@ -159,3 +169,61 @@ def nbytes(x: HTTensor) -> int:
     for tensor in x.B.values():
         mem += tensor.numel() * tensor.element_size()
     return mem
+
+
+def dtype(x: HTTensor) -> torch.dtype:
+    """
+    Returns the dtype of HT tensor ``x``.
+
+    All leaf matrices and transfer tensors of an HT tensor share the same dtype (checked on construction), which is
+    the dtype of the tensor.
+
+    Parameters
+    ----------
+    x : HTTensor
+        Input HT tensor.
+
+    Returns
+    -------
+    torch.dtype
+        The dtype of all components of ``x``.
+
+    Examples
+    --------
+    >>> import hiepy
+    >>> import torch
+    >>> torch.set_default_dtype(torch.float64)
+    >>> x = hiepy.ones((2, 3, 4), dtype=torch.float32)
+    >>> hiepy.dtype(x)
+    torch.float32
+    """
+    return x.B[x.dtree.get_root()].dtype
+
+
+def device(x: HTTensor) -> torch.device:
+    """
+    Returns the device of HT tensor ``x``.
+
+    All leaf matrices and transfer tensors of an HT tensor live on the same device (checked on construction), which
+    is the device of the tensor.
+
+    Parameters
+    ----------
+    x : HTTensor
+        Input HT tensor.
+
+    Returns
+    -------
+    torch.device
+        The device of all components of ``x``.
+
+    Examples
+    --------
+    >>> import hiepy
+    >>> import torch
+    >>> torch.set_default_dtype(torch.float64)
+    >>> x = hiepy.ones((2, 3, 4))
+    >>> hiepy.device(x)
+    device(type='cpu')
+    """
+    return x.B[x.dtree.get_root()].device

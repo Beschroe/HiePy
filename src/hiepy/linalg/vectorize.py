@@ -35,6 +35,7 @@ def vectorize(x: torch.Tensor) -> torch.Tensor:
     --------
     >>> import torch
     >>> import hiepy
+    >>> torch.set_default_dtype(torch.float64)
     >>> x = torch.tensor([[1, 2], [3, 4]])
     >>> hiepy.vectorize(x)
     tensor([1, 2, 3, 4])
@@ -77,6 +78,7 @@ def devectorize(x: torch.Tensor, shape: Shape) -> torch.Tensor:
     --------
     >>> import torch
     >>> import hiepy
+    >>> torch.set_default_dtype(torch.float64)
     >>> v = torch.tensor([1, 2, 3, 4])
     >>> hiepy.devectorize(v, (2, 2))
     tensor([[1, 2],

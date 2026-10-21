@@ -29,7 +29,7 @@ ATOL = 1e-10
 def _make(shape: tuple[int, ...], seed: int = 0) -> tuple[torch.Tensor, HTTensor]:
     """Return a dense random tensor and its exact HT representation."""
     gen = torch.Generator().manual_seed(seed)
-    dense = torch.randn(shape, generator=gen)
+    dense = torch.randn(shape, generator=gen, dtype=torch.double)
     return dense, hiepy.to_htt(dense, {"atol": 1e-13})
 
 
@@ -64,10 +64,10 @@ def _assert_valid_structure(x: HTTensor) -> None:
 @pytest.fixture
 def grad_enabled():
     """Enable autograd globally for one test and restore the previous state afterwards."""
-    previous = hiepy.config.grad_enabled
-    hiepy.config.set_grad_enabled(True)
+    previous = torch.is_grad_enabled()
+    torch.set_grad_enabled(True)
     yield
-    hiepy.config.set_grad_enabled(previous)
+    torch.set_grad_enabled(previous)
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~ Agreement with dense torch indexing ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -159,8 +159,8 @@ def test_all_entries_of_small_tensor():
 def test_entry_example_from_docstring():
     dense = torch.arange(1, 28, dtype=torch.double).reshape(3, 3, 3)
     x = hiepy.to_htt(dense, {"atol": 1e-8})
-    assert torch.allclose(hiepy.get(x, (0, 1, 2)), torch.tensor(6.0))
-    assert torch.allclose(hiepy.get(x, (-1, -1, -1)), torch.tensor(27.0))
+    assert torch.allclose(hiepy.get(x, (0, 1, 2)), torch.tensor(6.0, dtype=torch.double))
+    assert torch.allclose(hiepy.get(x, (-1, -1, -1)), torch.tensor(27.0, dtype=torch.double))
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~ Entry points ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -326,7 +326,7 @@ def test_result_supports_further_operations(key: Key):
 def test_indexing_a_non_canonical_tree():
     """Indexing works on HT tensors whose tree was restructured by a previous squeeze."""
     gen = torch.Generator().manual_seed(1)
-    dense = torch.randn(3, 1, 4, 5, generator=gen)
+    dense = torch.randn(3, 1, 4, 5, generator=gen, dtype=torch.double)
     x = hiepy.to_htt(dense, {"atol": 1e-13}).squeeze()
     dense = dense.squeeze(1)
     for key in [0, -1, (slice(None), 2), (1, slice(1, 3), -1), (0, 0), (slice(None), slice(None), 4)]:

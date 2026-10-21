@@ -12,10 +12,9 @@ orthogonalization, rank truncation, indexing and conversion to and from dense `t
 ```
 src/hiepy/
 ├── __init__.py          # Public API: re-exports every public function/class (see __all__)
-├── config.py            # Global singleton `config` (autograd + default dtype), applied on import
 ├── httensor/            # The data structure and its read-only / structural accessors
 │   ├── httensor.py      # class HTTensor (U, B, dtree, is_orthog) + method/operator wrappers
-│   ├── getter.py        # order, rank, shape, nbytes
+│   ├── getter.py        # order, rank, shape, nbytes, dtype, device
 │   ├── get_item.py      # get / __getitem__ (torch-style int/slice indexing)
 │   ├── full.py          # full: HT -> dense torch.Tensor
 │   ├── gramians.py      # gramians: reduced Gram matrices of an orthogonal HT tensor
@@ -25,7 +24,7 @@ src/hiepy/
 │   ├── randn.py         # random orthogonal HT tensor with bounded rank
 │   ├── hilbert.py       # Hilbert tensor via sinc quadrature
 │   ├── to_htt.py        # dense torch.Tensor -> HT (hierarchical SVD)
-│   └── copy.py          # copy / clone / detach (autograd-aware copies)
+│   └── copy.py          # copy / clone / detach (autograd-aware copies), to (dtype/device conversion)
 ├── algebra/             # Operations on HTTensors returning HTTensors (or scalars)
 │   ├── add.py, sub.py   # exact sum/difference via block-diagonal embedding
 │   ├── scalar_mul.py    # scaling via root transfer tensor
@@ -50,13 +49,14 @@ src/hiepy/
 └── utils/
     ├── dimtree.py       # class DimTree, type Node
     ├── data_types.py    # type aliases Shape, TensorDict, ScalarType, IndexKey; TypedDict TruncOpts
+    ├── dtype_device.py  # result_dtype / check_device for multi-operand operations (internal)
     └── trunc_rank.py    # rank selection from singular values (atol/rtol/max_rank)
 ```
 
 Related top-level locations:
 
-- `tests/` — pytest suite. So far only `test_get_item.py` (indexing); `test.ipynb` is an exploratory
-  notebook, not a test.
+- `tests/` — pytest suite: `test_get_item.py` (indexing), `test_dtype_device.py` (dtype/device rules);
+  `test.ipynb` is an exploratory notebook, not a test.
 - `docs/` + `mkdocs.yml` — MkDocs (material + mkdocstrings, NumPy docstring style). The pages in
   `docs/api/*.md` list the documented members **explicitly** (`::: hiepy.<name>`).
 
@@ -123,16 +123,33 @@ docstrings referenced in the functionality map below.
 - Results with fewer than two remaining modes are returned as dense `torch.Tensor`s, since HT
   tensors need order ≥ 2 (the same limit `squeeze` enforces).
 
-### Global configuration and autograd
+### Autograd
 
-- `import hiepy` executes `config.py`, which calls `torch.set_grad_enabled(False)` and
-  `torch.set_default_dtype(torch.double)` **process-wide**. Use `hiepy.config.set_grad_enabled` /
-  `set_default_dtype` to change this.
-- Factories accept `requires_grad`; gradients only flow if autograd is enabled globally as well
+- `import hiepy` has no global side effects; the torch defaults apply (default dtype `float32`,
+  autograd enabled). There is no hiepy-level configuration object.
+- Factories accept `requires_grad`; gradients only flow if torch autograd is enabled
   (see the `grad_enabled` fixture in `tests/test_get_item.py`).
-- dtype/device handling is not uniform: most factories and several internals allocate with the
-  global defaults; only `hilbert` (and the internal `diagonal_tensor`) take explicit
-  `dtype`/`device`. Check this before relying on non-default dtypes or GPU tensors.
+
+### dtype and device
+
+- Invariant: all components of an `HTTensor` share one dtype and one device. `HTTensor.__init__`
+  checks this (`TypeError` for mixed dtypes, `RuntimeError` for mixed devices); `x.dtype` /
+  `x.device` read it off the root transfer tensor. Code that assigns `x.U[t]` / `x.B[t]` directly
+  bypasses the check and must keep the invariant itself.
+- Every operation returns the dtype and device of its inputs. Internal helper tensors must be
+  allocated from the input (`dtype=x.dtype, device=x.device`, `t.new_zeros(...)`), never with
+  bare `torch.eye(1)` / `torch.zeros(...)`.
+- Operations with several tensor operands (`add`, `sub`, `contract`, `ele_mul`, `mode_mul`,
+  `ele_mode_mul`) first call `check_device(x=..., y=...)` (raises `RuntimeError`) and then cast
+  all operands to `result_dtype(...)` (`torch.promote_types`, the more precise dtype wins), both
+  from `utils/dtype_device.py`. Keep this pattern for new binary operations.
+- Scalars follow torch's promotion rules: Python scalars and 0-d tensors do not raise the dtype
+  (`scalar_mul` uses `torch.result_type`); a 0-d CPU tensor may be combined with any device.
+- Factories take `dtype=None, device=None` (before `requires_grad`), defaulting to
+  `torch.get_default_dtype()` / `torch.get_default_device()`. `randn` passes `generator` through
+  unchanged, so its device must match `device` (torch raises otherwise).
+- `x.to(dtype, device)` converts like `torch.Tensor.to` (stays in the autograd graph, shares
+  components that need no conversion); `load(path, map_location)` restores onto another device.
 
 ### Truncation options
 
@@ -151,8 +168,13 @@ docstrings referenced in the functionality map below.
 - Docstrings: NumPy style with LaTeX math (`$...$`, `$$...$$`) rendered by MkDocs/arithmatex,
   zero-based mode indices in formulas. Every public function documents preserved properties
   (tree, ranks, orthogonality) and arithmetic cost in its *Notes* section — keep that pattern.
-- Docstring examples are not run automatically. Printed results (errors, norms, random values)
-  are intentionally shown exactly; outputs of unseeded random examples are illustrative only.
+- Docstring examples run as doctests via `pytest --doctest-modules src/hiepy` (not part of a plain
+  `pytest tests/`). Every example starts, right after its imports, with
+  `>>> torch.set_default_dtype(torch.float64)`, so users can reproduce the printed results; expected
+  outputs are therefore float64 (no `dtype=` suffix). Keep this line in new examples. The root
+  `conftest.py` only restores the previous default dtype after each doctest. Printed results (errors,
+  norms) are shown exactly; outputs of unseeded random examples are illustrative only and marked
+  `# doctest: +SKIP`.
 - Commented-out legacy code (German comments, old `hiepy.core` import paths, old `Node` objects
   with `.dims`) still exists in several modules. It is not part of the API; do not revive it
   without adapting it to the current `DimTree`/`Node` design.
@@ -171,7 +193,6 @@ file.
 | `DimTree`, `Node` | `utils/dimtree.py` | tree navigation, traversal (`get_nodes`, `get_levels`, `get_leaves`, `get_inner_nodes`), `from_order`, ASCII `__str__` |
 | `Shape`, `TensorDict`, `ScalarType`, `TruncOpts` | `utils/data_types.py` | type aliases / options |
 | `IndexKey` (*not exported*) | `utils/data_types.py` | per-mode index type used by `get` |
-| `config` | `config.py` | global autograd + dtype |
 
 ### Construction (`factory/`)
 
@@ -183,12 +204,13 @@ file.
 | `hilbert` | `factory/hilbert.py` | approximated Hilbert tensor, rank `2M+1`, meant to be truncated afterwards |
 | `to_htt` | `factory/to_htt.py` | dense → HT via hierarchical SVD with `TruncOpts` (floating-point input only) |
 | `copy`, `clone`, `detach` | `factory/copy.py` | `.copy()`, `.clone()`, `.detach()` |
+| `to` | `factory/copy.py` | `.to(dtype, device)`; dtype/device conversion |
 
 ### Inspection and access (`httensor/`)
 
 | Name | File | Method / note |
 |---|---|---|
-| `order`, `shape`, `rank`, `nbytes` | `httensor/getter.py` | properties `.order`, `.shape`, `.rank`, `.nbytes` |
+| `order`, `shape`, `rank`, `nbytes`, `dtype`, `device` | `httensor/getter.py` | properties `.order`, `.shape`, `.rank`, `.nbytes`, `.dtype`, `.device` |
 | `get` | `httensor/get_item.py` | `.get()`, `x[...]`; torch-style, see "Indexing" above |
 | `full` | `httensor/full.py` | `.full()`; dense reconstruction, exponential memory |
 | `gramians` | `httensor/gramians.py` | `.gramians()`; requires orthogonal input |
@@ -236,6 +258,7 @@ Not available: general `tensordot` between HT tensors (module commented out), Kr
 | Name | File | Purpose |
 |---|---|---|
 | `trunc_rank` | `utils/trunc_rank.py` | rank from singular-value tail norm vs. `atol + rtol·‖s‖`, clipped to `max_rank` |
+| `result_dtype`, `check_device` (*internal*) | `utils/dtype_device.py` | dtype promotion and device check for multi-operand operations |
 
 ## Typical internal call chains
 
@@ -261,6 +284,7 @@ Useful when debugging or changing a core routine, because changes propagate:
 ```bash
 pip install -e ".[dev,docs]"   # a local .venv exists in the repo root
 pytest tests/
+pytest --doctest-modules src/hiepy   # docstring examples
 ruff check src/hiepy tests
 mkdocs serve
 ```

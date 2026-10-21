@@ -10,6 +10,7 @@ import torch
 
 from hiepy.httensor.httensor import HTTensor as HTTensor
 from hiepy.utils.data_types import TensorDict
+from hiepy.utils.dtype_device import check_device, result_dtype
 
 
 def sub(x: HTTensor, y: HTTensor) -> HTTensor:
@@ -49,10 +50,14 @@ def sub(x: HTTensor, y: HTTensor) -> HTTensor:
     ValueError
         If ``x`` and ``y`` do not share the same dimension tree or shape.
 
+    RuntimeError
+        If ``x`` and ``y`` live on different devices.
+
     Notes
     -----
     - This method is functionally equivalent to `hiepy.add`, with the exception that
       the root transfer tensor of ``y`` is scaled by -1.0 before embedding.
+    - The result has the promoted dtype of ``x`` and ``y`` (e.g. ``float32`` and ``float64`` give ``float64``).
     - The dimension tree is preserved.
     - The tensor shape is preserved.
     - Rank growth is additive: $r_t^{out} = r_t^x + r_t^y$
@@ -65,6 +70,7 @@ def sub(x: HTTensor, y: HTTensor) -> HTTensor:
     --------
     >>> import hiepy
     >>> import torch
+    >>> torch.set_default_dtype(torch.float64)
     >>> x = hiepy.randn(shape=(8, 8, 8))
     >>> y = hiepy.randn(shape=(8, 8, 8))
     >>> diff_hiepy = hiepy.sub(x,y)
@@ -79,6 +85,9 @@ def sub(x: HTTensor, y: HTTensor) -> HTTensor:
         raise ValueError("Dimension trees of 'x' and 'y' are not compatible")
     if x.shape != y.shape:
         raise ValueError(f"Shape of 'y' {y.shape} does not match shape of 'x' {x.shape}")
+    device = check_device(x=x, y=y)
+    dtype = result_dtype(x, y)
+    x, y = x.to(dtype=dtype), y.to(dtype=dtype)
 
     U: TensorDict = {}
     B: TensorDict = {}
@@ -93,13 +102,13 @@ def sub(x: HTTensor, y: HTTensor) -> HTTensor:
         if dtree.is_root(t):
             xl, xr, _ = x.B[t].shape  # rank of node x children
             yl, yr, _ = y.B[t].shape  # rank of node y children
-            Bt = torch.zeros(xl + yl, xr + yr, 1)
+            Bt = torch.zeros(xl + yl, xr + yr, 1, dtype=dtype, device=device)
             Bt[:xl, :xr] = x.B[t]
             Bt[xl:, xr:] = y.B[t] * (-1.0)
         else:
             xl, xr, xk = x.B[t].shape  # rank of node children and node x (left, right, node)
             yl, yr, yk = y.B[t].shape  # rank of node children and node y (left, right, node)
-            Bt = torch.zeros(xl + yl, xr + yr, xk + yk)
+            Bt = torch.zeros(xl + yl, xr + yr, xk + yk, dtype=dtype, device=device)
             Bt[:xl, :xr, :xk] = x.B[t]
             Bt[xl:, xr:, xk:] = y.B[t]
         B[t] = Bt

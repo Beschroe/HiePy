@@ -53,6 +53,7 @@ def left_svd_gramian(G: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
     --------
     >>> import torch
     >>> import hiepy
+    >>> torch.set_default_dtype(torch.float64)
     >>> V = torch.tensor([[1.0, 2.0], [3.0, 4.0]])
     >>> G = V @ V.T  # Construct the Gram matrix
     >>> # Compare singular values of left_svd_gramian to directly computed singular values

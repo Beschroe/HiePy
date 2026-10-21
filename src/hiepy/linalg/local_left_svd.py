@@ -71,16 +71,16 @@ def local_left_svd(x: HTTensor) -> dict[Node, tuple[torch.Tensor, torch.Tensor]]
     --------
     >>> import torch
     >>> import hiepy
+    >>> torch.set_default_dtype(torch.float64)
     >>> gen = torch.Generator().manual_seed(42)
     >>> x = torch.randn(2,3,4,generator=gen)
     >>> x_ht = hiepy.to_htt(x, {"atol":1e-8})
     >>> t = (0,1)
     >>> hiepy.local_left_svd(x_ht)[t]
     (tensor([[-1.0000e+00, -1.1928e-18,  2.1948e-17, -1.1690e-17],
-         [ 1.1928e-18, -1.0000e+00,  2.7756e-16,  3.4694e-17],
-         [-2.1948e-17, -4.4409e-16, -1.0000e+00, -5.2909e-17],
-         [-1.1690e-17,  4.8572e-17, -5.2909e-17,  1.0000e+00]]),
-    tensor([3.6357, 1.3479, 0.5663, 0.3282]))
+            [ 1.1928e-18, -1.0000e+00,  2.7756e-16,  3.4694e-17],
+            [-2.1948e-17, -4.4409e-16, -1.0000e+00, -5.2909e-17],
+            [-1.1690e-17,  4.8572e-17, -5.2909e-17,  1.0000e+00]]), tensor([3.6357, 1.3479, 0.5663, 0.3282]))
     """
     x = orthog(x)
 
@@ -88,13 +88,13 @@ def local_left_svd(x: HTTensor) -> dict[Node, tuple[torch.Tensor, torch.Tensor]]
 
     # Compute projection matrices from root to leaves
 
-    W = {root: torch.eye(1)}
+    W = {root: torch.eye(1, dtype=x.dtype, device=x.device)}
 
     SVDs: dict[Node, tuple[torch.Tensor, torch.Tensor]] = {}
 
     # Handle the root explicitly
     norm = torch.linalg.norm(x.B[root])
-    SVDs[root] = torch.eye(1), torch.tensor([norm])
+    SVDs[root] = torch.eye(1, dtype=x.dtype, device=x.device), norm.reshape(1)
 
     for t in x.dtree.get_nodes(order="top-down"):
         if x.dtree.is_leaf(t):

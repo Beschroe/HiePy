@@ -51,10 +51,18 @@ class HTTensor:
     is_orthog : bool
         True if the internal components satisfy hierarchical orthogonality conditions.
 
+    Raises
+    ------
+    TypeError
+        If the leaf matrices and transfer tensors do not all share the same dtype.
+    RuntimeError
+        If the leaf matrices and transfer tensors do not all live on the same device.
+
     Notes
     -----
     - The memory requirement is given as $\mathcal{O}(dnr + dr^3)$, where $d$ is the tensor order, $n$ the maximum
       mode size, and $r$ the maximum hierarchical rank.
+    - All components share one dtype and one device, available as ``x.dtype`` and ``x.device``.
     """
 
     def __init__(
@@ -64,6 +72,18 @@ class HTTensor:
         dtree: DimTree,
         is_orthog: bool = False,
     ):
+        root = dtree.get_root()
+        for t, component in [*U.items(), *B.items()]:
+            if component.dtype != B[root].dtype:
+                raise TypeError(
+                    f"All components must share the same dtype, got {B[root].dtype} at node {root} "
+                    f"and {component.dtype} at node {t}."
+                )
+            if component.device != B[root].device:
+                raise RuntimeError(
+                    f"All components must live on the same device, got '{B[root].device}' at node {root} "
+                    f"and '{component.device}' at node {t}."
+                )
         self.U = U
         self.B = B
         self.dtree = dtree
@@ -84,6 +104,11 @@ class HTTensor:
         from hiepy.factory.copy import detach as _detach
 
         return _detach(self)
+
+    def to(self, dtype: torch.dtype | None = None, device: torch.device | str | None = None) -> HTTensor:
+        from hiepy.factory.copy import to as _to
+
+        return _to(self, dtype=dtype, device=device)
 
     # ~~~~~~~~~~~~~~~~~~~~~~~~~ Getter ~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -110,6 +135,18 @@ class HTTensor:
         from hiepy.httensor.getter import nbytes as _nbytes
 
         return _nbytes(self)
+
+    @property
+    def dtype(self) -> torch.dtype:
+        from hiepy.httensor.getter import dtype as _dtype
+
+        return _dtype(self)
+
+    @property
+    def device(self) -> torch.device:
+        from hiepy.httensor.getter import device as _device
+
+        return _device(self)
 
     def norm(self) -> torch.Tensor:
         from hiepy.linalg.norm import norm as _norm
@@ -226,7 +263,7 @@ class HTTensor:
         _save(self, path)
 
     @staticmethod
-    def load(path: str | Path) -> HTTensor:
+    def load(path: str | Path, map_location: torch.device | str | None = None) -> HTTensor:
         from hiepy.httensor.io import load as _load
 
-        return _load(path)
+        return _load(path, map_location)

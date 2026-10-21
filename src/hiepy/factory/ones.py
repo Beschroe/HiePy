@@ -13,7 +13,13 @@ from hiepy.utils.data_types import Shape
 from hiepy.utils.dimtree import DimTree
 
 
-def ones(shape: Shape, orthog: bool = False, requires_grad: bool = False) -> HTTensor:
+def ones(
+    shape: Shape,
+    orthog: bool = False,
+    dtype: torch.dtype | None = None,
+    device: torch.device | str | None = None,
+    requires_grad: bool = False,
+) -> HTTensor:
     r"""
     Constructs a constant HT tensors filled with ones, with shape defined by ``shape``.
 
@@ -28,6 +34,12 @@ def ones(shape: Shape, orthog: bool = False, requires_grad: bool = False) -> HTT
     orthog : bool, optional
         If `True`, an orthogonal HT tensors is constructed.
         Otherwise, a non-orthogonal HT tensors is returned.
+
+    dtype : torch.dtype, optional
+        The dtype of the tensor components. Defaults to ``torch.get_default_dtype()``.
+
+    device : torch.device | str, optional
+        The device on which the tensor components are allocated. Defaults to ``torch.get_default_device()``.
 
     requires_grad: bool
         If `True`, the HT tensor components are attached to the autograd graph.
@@ -49,10 +61,13 @@ def ones(shape: Shape, orthog: bool = False, requires_grad: bool = False) -> HTT
     Examples
     --------
     >>> import hiepy
+    >>> import torch
+    >>> torch.set_default_dtype(torch.float64)
     >>> x = hiepy.ones((2, 2, 2))
     >>> x.full()
     tensor([[[1., 1.],
              [1., 1.]],
+    <BLANKLINE>
             [[1., 1.],
              [1., 1.]]])
 
@@ -60,16 +75,21 @@ def ones(shape: Shape, orthog: bool = False, requires_grad: bool = False) -> HTT
     >>> x.is_orthog
     True
     """
+    dtype = torch.get_default_dtype() if dtype is None else dtype
+
     # Create leaf matrices and transfer tensors
     dtree = DimTree.from_order(len(shape))
     if orthog:
-        U = {leaf: torch.ones(shape[leaf[0]], 1) / shape[leaf[0]] ** 0.5 for leaf in dtree.get_leaves()}
-        B = {t: torch.ones(1, 1, 1) for t in dtree.get_inner_nodes()}
-        energy = torch.exp(0.5 * torch.sum(torch.log(torch.tensor(shape))))
+        U = {
+            leaf: torch.ones(shape[leaf[0]], 1, dtype=dtype, device=device) / shape[leaf[0]] ** 0.5
+            for leaf in dtree.get_leaves()
+        }
+        B = {t: torch.ones(1, 1, 1, dtype=dtype, device=device) for t in dtree.get_inner_nodes()}
+        energy = torch.exp(0.5 * torch.sum(torch.log(torch.tensor(shape, dtype=dtype, device=device))))
         B[dtree.get_root()] = B[dtree.get_root()] * energy
     else:
-        U = {leaf: torch.ones(shape[leaf[0]], 1) for leaf in dtree.get_leaves()}
-        B = {t: torch.ones(1, 1, 1) for t in dtree.get_inner_nodes()}
+        U = {leaf: torch.ones(shape[leaf[0]], 1, dtype=dtype, device=device) for leaf in dtree.get_leaves()}
+        B = {t: torch.ones(1, 1, 1, dtype=dtype, device=device) for t in dtree.get_inner_nodes()}
 
     # Attach to autograd graph as leaves, if required
     if requires_grad:
