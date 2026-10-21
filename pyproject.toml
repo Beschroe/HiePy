@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "A comprehensive PyTorch framework for Hierarchical Tucker (HT) tensors."
 readme = "README.md"
 requires-python = ">=3.12"
-license = { text = "MIT" }
+license = { text = "EUPL 1.2" }
 authors = [
     { name = "Benedikt Schroeter", email = "b.schroeter@em.uni-frankfurt.de" }
 ]
@@ -28,6 +28,8 @@ dependencies = [
 # Dependencies needed only for development, linting, and testing
 dev = [
     "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "hypothesis>=6.0.0",
     "ruff>=0.1.0",
     "mypy>=1.0.0",
 ]
@@ -65,3 +67,23 @@ python_version = "3.12"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true  # Forces you to write type hints for functions
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-ra --strict-markers --strict-config"
+markers = [
+    "slow: long-running tests (deselect with -m 'not slow')",
+]
+
+[tool.coverage.run]
+source = ["hiepy"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+]
