@@ -17,23 +17,20 @@ from hypothesis import strategies as st
 
 import hiepy
 from hiepy import HTTensor
-from tests.helpers import RTOL_EXACT, RTOL_GRAM
-from tests.ops import ht_magnitude
 from tests.strategies import decaying_dense, ht_pairs, ht_tensors
+from tests.tolerances import Accuracy, assert_within, magnitude
 
 TOLS = [1e-2, 1e-4, 1e-6, 1e-8, 1e-10, 1e-12]
 GRAM_TOLS = [tol for tol in TOLS if tol >= 1e-8]  # resolution limit of the Gramian-based routines (Q4)
 
 type Truncation = Callable[[HTTensor, hiepy.TruncOpts], tuple[HTTensor, dict[hiepy.Node, torch.Tensor]]]
 
-TRUNCATIONS: dict[str, tuple[Truncation, list[float]]] = {
-    "truncate_svd": (hiepy.truncate_svd, TOLS),
-    "truncate_gram": (hiepy.truncate_gram, GRAM_TOLS),
+# Routine, tested tolerances, and accuracy of the returned discarded singular values (N5): truncate_gram computes
+# them as square roots of Gramian eigenvalues (Accuracy.GRAMIAN, Q4/Q5).
+TRUNCATIONS: dict[str, tuple[Truncation, list[float], Accuracy]] = {
+    "truncate_svd": (hiepy.truncate_svd, TOLS, Accuracy.ROUNDING),
+    "truncate_gram": (hiepy.truncate_gram, GRAM_TOLS, Accuracy.GRAMIAN),
 }
-
-# Rounding margin of N5, relative to m(x): the discarded singular values of truncate_gram are square roots of
-# Gramian eigenvalues and therefore only accurate to sqrt(eps)·‖x‖ (Q5).
-N5_MARGIN = {"truncate_svd": RTOL_EXACT, "truncate_gram": RTOL_GRAM}
 
 
 @st.composite
@@ -69,12 +66,12 @@ def _max_rank(x: HTTensor) -> int:
 @given(x=_inputs(), data=st.data())
 def test_truncation_meets_tolerance(name: str, kind: str, x: HTTensor, data: st.DataObject):
     """N4: ``truncate_*`` stays within ``atol + rtol · ‖x‖`` (plus rounding margin)."""
-    truncate, tols = TRUNCATIONS[name]
+    truncate, tols, _ = TRUNCATIONS[name]
     tol = data.draw(st.sampled_from(tols), label="tol")
     X = x.full()
     opts, bound = _opts(kind, tol, torch.linalg.norm(X).item())
     result, _ = truncate(x, opts)
-    assert _error(X, result) <= bound + RTOL_EXACT * ht_magnitude(x)
+    assert_within(_error(X, result), bound, scale=magnitude(x))
 
 
 @pytest.mark.parametrize("kind", ["atol", "rtol", "both"])
@@ -84,7 +81,7 @@ def test_to_htt_meets_tolerance(kind: str, x: HTTensor, tol: float):
     T = x.full()
     norm = torch.linalg.norm(T).item()
     opts, bound = _opts(kind, tol, norm)
-    assert _error(T, hiepy.to_htt(T, opts)) <= bound + RTOL_EXACT * norm
+    assert_within(_error(T, hiepy.to_htt(T, opts)), bound, scale=norm, scale_label="‖T‖")
 
 
 @given(pair=ht_pairs(), tol=st.sampled_from(GRAM_TOLS))
@@ -94,7 +91,7 @@ def test_ele_mul_meets_tolerance(pair: tuple[HTTensor, HTTensor], tol: float):
     P = x.full() * y.full()
     atol = tol * torch.linalg.norm(P).item()
     result = hiepy.ele_mul(x, y, {"atol": atol})
-    assert _error(P, result) <= atol + RTOL_EXACT * ht_magnitude(x) * ht_magnitude(y)
+    assert_within(_error(P, result), atol, scale=magnitude(x) * magnitude(y), scale_label="m(x)·m(y)")
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~ N5: error vs. discarded singular values ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -103,9 +100,9 @@ def test_ele_mul_meets_tolerance(pair: tuple[HTTensor, HTTensor], tol: float):
 @pytest.mark.parametrize("name", TRUNCATIONS)
 @given(x=_inputs(), data=st.data())
 def test_error_bounded_by_discarded_singular_values(name: str, x: HTTensor, data: st.DataObject):
-    """N5: the error is bounded by the discarded singular values (plus ``N5_MARGIN``), also when ``max_rank``
-    cuts."""
-    truncate, tols = TRUNCATIONS[name]
+    """N5: the error is bounded by the discarded singular values (plus a rounding margin according to their
+    accuracy), also when ``max_rank`` cuts."""
+    truncate, tols, accuracy = TRUNCATIONS[name]
     X = x.full()
     if data.draw(st.booleans(), label="max_rank instead of tolerance"):
         opts: hiepy.TruncOpts = {"max_rank": data.draw(st.integers(1, 4), label="max_rank")}
@@ -113,7 +110,7 @@ def test_error_bounded_by_discarded_singular_values(name: str, x: HTTensor, data
         opts, _ = _opts("rtol", data.draw(st.sampled_from(tols), label="tol"), 0.0)
     result, discarded = truncate(x, opts)
     bound = math.sqrt(sum((s**2).sum().item() for s in discarded.values()))
-    assert _error(X, result) <= bound + N5_MARGIN[name] * ht_magnitude(x)
+    assert_within(_error(X, result), bound, scale=magnitude(x), accuracy=accuracy)
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~ N6: rank cap ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -123,7 +120,7 @@ def test_error_bounded_by_discarded_singular_values(name: str, x: HTTensor, data
 @given(x=_inputs(), max_rank=st.integers(1, 4))
 def test_truncation_respects_max_rank(name: str, x: HTTensor, max_rank: int):
     """N6: ``truncate_*`` with ``max_rank`` (alone or with a tolerance) caps every non-root rank."""
-    truncate, _ = TRUNCATIONS[name]
+    truncate, _, _ = TRUNCATIONS[name]
     for opts in ({"max_rank": max_rank}, {"max_rank": max_rank, "rtol": 1e-12}):
         result, _ = truncate(x, opts)  # type: ignore[arg-type]
         assert _max_rank(result) <= max_rank

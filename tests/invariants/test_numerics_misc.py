@@ -10,9 +10,8 @@ from hypothesis import strategies as st
 
 import hiepy
 from hiepy import HTTensor
-from tests.helpers import RTOL_EXACT, TOL_ORTHOG, assert_close
-from tests.ops import ht_magnitude
 from tests.strategies import ht_tensors, shapes
+from tests.tolerances import assert_exact, assert_orthonormal, assert_within, magnitude
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~ N1: exact factories ~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -22,15 +21,15 @@ def test_constant_factories_are_exact(shape: tuple[int, ...], c: float, orthog: 
     """N1: ``zeros``, ``ones`` and ``constant`` (orthogonal or not) equal their dense torch counterparts."""
     kw = dict(dtype=torch.float64)
     assert torch.equal(hiepy.zeros(shape, **kw).full(), torch.zeros(shape, **kw))  # type: ignore[arg-type]
-    assert_close(hiepy.ones(shape, orthog=orthog, **kw).full(), torch.ones(shape, **kw))  # type: ignore[arg-type]
-    assert_close(hiepy.constant(shape, c, orthog=orthog, **kw).full(), torch.full(shape, c, **kw))  # type: ignore[arg-type]
+    assert_exact(hiepy.ones(shape, orthog=orthog, **kw).full(), torch.ones(shape, **kw))  # type: ignore[arg-type]
+    assert_exact(hiepy.constant(shape, c, orthog=orthog, **kw).full(), torch.full(shape, c, **kw))  # type: ignore[arg-type]
 
 
 @given(shape=shapes())
 def test_arange_is_exact(shape: tuple[int, ...]):
     """N1: ``arange`` equals ``torch.arange`` reshaped in C order."""
     expected = torch.arange(prod(shape), dtype=torch.float64).reshape(shape)
-    assert_close(hiepy.arange(shape, dtype=torch.float64).full(), expected)
+    assert_exact(hiepy.arange(shape, dtype=torch.float64).full(), expected)
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~ N7: orthog does not increase ranks ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -92,25 +91,24 @@ def test_local_left_svd_matches_dense_svd(x: HTTensor):
     """N9: per node, the local vectors are orthonormal, the singular values are those of the matricization, and the
     global vectors ``U_t Û_t`` (non-root nodes) span its column space."""
     X = x.full()
-    m = ht_magnitude(x)
+    m = magnitude(x)
     xo = hiepy.orthog(x)
     for t, (U_loc, S) in hiepy.local_left_svd(x).items():
-        eye = torch.eye(U_loc.shape[1], dtype=U_loc.dtype)
-        assert torch.linalg.norm(U_loc.T @ U_loc - eye).item() <= TOL_ORTHOG
+        assert_orthonormal(U_loc, f"local vectors of node {t}")
         F, modes = _frame(xo, t)
         X_t = hiepy.matricize(X, modes)
-        assert_close(*_padded(S, torch.linalg.svdvals(X_t)), scale=m)
+        assert_exact(*_padded(S, torch.linalg.svdvals(X_t)), scale=m, scale_label="m(x)")
         if xo.dtree.is_root(t):
             continue  # the root frame is the tensor itself, not an orthonormal basis
         W = F @ U_loc
-        assert torch.linalg.norm(X_t - W @ (W.T @ X_t)).item() <= RTOL_EXACT * m
+        assert_within(torch.linalg.norm(X_t - W @ (W.T @ X_t)).item(), 0.0, scale=m)
 
 
 @given(x=ht_tensors())
 def test_gramian_eigenvalues_are_squared_singular_values(x: HTTensor):
     """N9: the eigenvalues of ``gramians(orthog(x))[t]`` are the squared singular values of the matricization."""
     X = x.full()
-    m = ht_magnitude(x)
+    m = magnitude(x)
     xo = hiepy.orthog(x)
     for t, G in hiepy.gramians(xo).items():
         if xo.dtree.is_root(t):
@@ -118,4 +116,4 @@ def test_gramian_eigenvalues_are_squared_singular_values(x: HTTensor):
         _, modes = _frame(xo, t)
         eigenvalues = torch.linalg.eigvalsh(G).flip(0)
         squared = torch.linalg.svdvals(hiepy.matricize(X, modes)) ** 2
-        assert_close(*_padded(eigenvalues, squared), scale=m**2)
+        assert_exact(*_padded(eigenvalues, squared), scale=m**2, scale_label="m(x)²")

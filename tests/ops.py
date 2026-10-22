@@ -21,6 +21,7 @@ from hypothesis import strategies as st
 import hiepy
 from hiepy import HTTensor
 from hiepy.utils.data_types import IndexKey
+from tests.tolerances import magnitude
 
 type Result = HTTensor | torch.Tensor | tuple[HTTensor, dict[hiepy.Node, torch.Tensor]] | dict
 type DenseOp = Callable[[torch.Tensor, torch.Tensor, Any], torch.Tensor]
@@ -43,15 +44,15 @@ def _same_dtype(arg: object) -> torch.dtype | None:
 
 
 def _sum_of_magnitudes(x: HTTensor, y: HTTensor, arg: object) -> float:
-    return ht_magnitude(x) + ht_magnitude(y)
+    return magnitude(x) + magnitude(y)
 
 
 def _product_of_magnitudes(x: HTTensor, y: HTTensor, arg: object) -> float:
-    return ht_magnitude(x) * ht_magnitude(y)
+    return magnitude(x) * magnitude(y)
 
 
 def _magnitude(x: HTTensor, y: HTTensor, arg: object) -> float:
-    return ht_magnitude(x)
+    return magnitude(x)
 
 
 @dataclass(frozen=True)
@@ -76,9 +77,9 @@ class Op:
     out_dtype
         dtype of the result if it differs from the input dtype (D1), given ``arg``.
     magnitude
-        Size of the quantities entering the result, given ``(x, y, arg)``, built from ``ht_magnitude``. N1 compares
-        relative to the larger of this and the norm of the reference, so that cancellation (in the operation or
-        inside the HT representation) does not demand an error below rounding.
+        Size of the quantities entering the result, given ``(x, y, arg)``, built from ``tests.tolerances.magnitude``.
+        N1 compares relative to the larger of this and the norm of the reference, so that cancellation (in the
+        operation or inside the HT representation) does not demand an error below rounding.
     """
 
     call: Callable[[HTTensor, HTTensor, Any], Result]
@@ -93,19 +94,6 @@ class Op:
     def run(self, x: HTTensor, y: HTTensor) -> Result:
         """Apply the operation with its default argument."""
         return self.call(x, y, self.default(x))
-
-
-def ht_magnitude(x: HTTensor) -> float:
-    """Product of the spectral norms of all components (transfer tensors matricized as ``(r_l r_r) x r_t``).
-
-    Upper bound of ``‖x‖`` that equals it for orthonormal components; rounding errors of operations on ``x`` scale
-    with this quantity rather than with ``‖x‖`` when the representation contains cancellation.
-    """
-    result = 1.0
-    for t in x.dtree.get_nodes():
-        C = x.U[t] if x.dtree.is_leaf(t) else x.B[t].reshape(-1, x.B[t].shape[2])
-        result *= torch.linalg.matrix_norm(C.detach().double(), ord=2).item()
-    return result
 
 
 def ht_result(result: Result) -> HTTensor | None:
@@ -259,7 +247,7 @@ OPS: dict[str, Op] = {
         _flag_as_input,
         args=_scalar_args,
         default=lambda x: 3.0,
-        magnitude=lambda x, y, c: abs(float(c)) * ht_magnitude(x),
+        magnitude=lambda x, y, c: abs(float(c)) * magnitude(x),
     ),
     "mode_mul": Op(
         lambda x, y, a: hiepy.mode_mul(x, *a),
@@ -267,7 +255,7 @@ OPS: dict[str, Op] = {
         _flag_false,
         args=_mode_mul_args,
         default=_default_matrix,
-        magnitude=lambda x, y, a: torch.linalg.matrix_norm(a[0], ord=2).item() * ht_magnitude(x),
+        magnitude=lambda x, y, a: torch.linalg.matrix_norm(a[0], ord=2).item() * magnitude(x),
     ),
     "ele_mode_mul": Op(
         lambda x, y, a: hiepy.ele_mode_mul(x, *a),
@@ -275,7 +263,7 @@ OPS: dict[str, Op] = {
         _flag_false,
         args=_ele_mode_mul_args,
         default=_default_vector,
-        magnitude=lambda x, y, a: a[0].abs().max().item() * ht_magnitude(x),
+        magnitude=lambda x, y, a: a[0].abs().max().item() * magnitude(x),
     ),
     "ele_mul": Op(lambda x, y, a: x * y, lambda X, Y, a: X * Y, _flag_false, magnitude=_product_of_magnitudes),
     "ele_mul_truncated": Op(

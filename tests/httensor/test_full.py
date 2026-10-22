@@ -14,7 +14,7 @@ import pytest
 import torch
 
 from hiepy import DimTree, HTTensor
-from tests.helpers import assert_close
+from tests.tolerances import assert_exact
 
 SHAPE = (2, 3, 4, 2)
 
@@ -58,4 +58,4 @@ def test_full_matches_entrywise_contraction(name: str):
     """N1: ``full`` places every entry at its multi-index, for any binary tree."""
     x = _random_ht(_tree(TREES[name]))
     expected = torch.stack([_entry(x, idx) for idx in itertools.product(*map(range, SHAPE))]).reshape(SHAPE)
-    assert_close(x.full(), expected)
+    assert_exact(x.full(), expected)

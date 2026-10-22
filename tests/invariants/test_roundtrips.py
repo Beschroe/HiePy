@@ -11,8 +11,9 @@ from hypothesis import strategies as st
 
 import hiepy
 from hiepy import DimTree, HTTensor
-from tests.helpers import assert_close, assert_orthogonal, assert_valid_structure
+from tests.helpers import assert_orthogonal, assert_valid_structure
 from tests.strategies import ht_tensors, shapes
+from tests.tolerances import assert_exact
 
 
 @st.composite
@@ -33,7 +34,7 @@ def test_to_htt_without_truncation_is_exact(T: torch.Tensor):
     assert x.dtree == DimTree.from_order(T.ndim)
     assert x.is_orthog
     assert_orthogonal(x)
-    assert_close(x.full(), T)
+    assert_exact(x.full(), T)
 
 
 @given(x=ht_tensors())

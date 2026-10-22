@@ -21,10 +21,9 @@ import hiepy
 from hiepy import HTTensor
 from hiepy.utils.data_types import IndexKey
 from tests.helpers import assert_valid_structure, make_dense_htt
+from tests.tolerances import assert_exact
 
 type Key = IndexKey | tuple[IndexKey, ...]
-
-ATOL = 1e-10
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~ Helpers and fixtures ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -41,7 +40,7 @@ def _assert_matches(result: HTTensor | torch.Tensor, expected: torch.Tensor) -> 
         assert not isinstance(result, HTTensor)
         dense = result
     assert dense.shape == expected.shape
-    assert torch.allclose(dense, expected, atol=ATOL)
+    assert_exact(dense, expected)
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~ Agreement with dense torch indexing ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -133,8 +132,8 @@ def test_all_entries_of_small_tensor():
 def test_entry_example_from_docstring():
     dense = torch.arange(1, 28, dtype=torch.double).reshape(3, 3, 3)
     x = hiepy.to_htt(dense, {"atol": 1e-8})
-    assert torch.allclose(hiepy.get(x, (0, 1, 2)), torch.tensor(6.0, dtype=torch.double))
-    assert torch.allclose(hiepy.get(x, (-1, -1, -1)), torch.tensor(27.0, dtype=torch.double))
+    assert_exact(hiepy.get(x, (0, 1, 2)), torch.tensor(6.0, dtype=torch.double))
+    assert_exact(hiepy.get(x, (-1, -1, -1)), torch.tensor(27.0, dtype=torch.double))
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~ Entry points ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -159,9 +158,9 @@ def test_getitem_with_comma_syntax():
 
 def test_negative_index_equals_positive_counterpart():
     _, x = make_dense_htt((3, 4, 5))
-    assert torch.allclose(x[-1].full(), x[2].full())
-    assert torch.allclose(x[:, -4].full(), x[:, 0].full())
-    assert torch.allclose(x[-3, -4, -5], x[0, 0, 0])
+    assert_exact(x[-1].full(), x[2].full())
+    assert_exact(x[:, -4].full(), x[:, 0].full())
+    assert_exact(x[-3, -4, -5], x[0, 0, 0])
 
 
 def test_index_like_integers_are_accepted():
@@ -258,7 +257,7 @@ def test_input_is_not_modified(key: Key):
     assert set(x.U) == set(U_before) and set(x.B) == set(B_before)
     assert all(torch.equal(x.U[t], U_before[t]) for t in U_before)
     assert all(torch.equal(x.B[t], B_before[t]) for t in B_before)
-    assert torch.allclose(x.full(), dense, atol=ATOL)
+    assert_exact(x.full(), dense)
 
 
 @pytest.mark.parametrize("key", [slice(None), (), slice(1, 3), (slice(None), 1)], ids=repr)
@@ -270,7 +269,7 @@ def test_result_shares_no_memory_with_input(key: Key):
         u.zero_()
     for b in result.B.values():
         b.zero_()
-    assert torch.allclose(x.full(), x_full_before)
+    assert_exact(x.full(), x_full_before)
     assert result.dtree is not x.dtree
 
 
@@ -292,9 +291,9 @@ def test_result_supports_further_operations(key: Key):
     result = hiepy.get(x, key)
     expected = dense[key]
     assert_valid_structure(result)
-    assert torch.allclose(result.orthog().full(), expected, atol=ATOL)
-    assert torch.allclose(result.norm(), torch.linalg.norm(expected), atol=ATOL)
-    assert torch.allclose(hiepy.contract(result, result), torch.sum(expected * expected), atol=ATOL)
+    assert_exact(result.orthog().full(), expected)
+    assert_exact(result.norm(), torch.linalg.norm(expected))
+    assert_exact(hiepy.contract(result, result), torch.sum(expected * expected))
 
 
 def test_indexing_a_non_canonical_tree():
