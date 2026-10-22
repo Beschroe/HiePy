@@ -17,7 +17,7 @@ cuda = pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is not ava
 
 # Tolerances (INVARIANTS.md, "Conventions"). Relax centrally if they cause false failures.
 RTOL_EXACT = 1e-14
-TOL_ORTHOG = 1e-14
+TOL_ORTHOG = 1e-13
 # Accuracy of singular values computed as sqrt of Gramian eigenvalues (truncate_gram): an eigenvalue is accurate to
 # about eps·‖x‖², so a singular value is accurate to at most sqrt(eps)·‖x‖ (INVARIANTS.md, N5 and Q5).
 RTOL_GRAM = torch.finfo(torch.float64).eps ** 0.5

@@ -30,6 +30,8 @@ def full(x: HTTensor) -> torch.Tensor:
     Notes
     -----
     - The shape of the tensor is preserved.
+    - Works for any dimension tree: the rows of the frame of a node are ordered by the modes of its left subtree,
+      then those of its right subtree, and the root frame is folded back according to this order.
     - Unfolding destroys the linear scaling of the HT format. The storage requirement jumps from
       $\mathcal{O}(dnr + dr^3)$ $\mathcal{O}(n^d)$, where $d$ is the number of dimensions, $n$ the maximum mode size,
       and $r$ the maximum hierarchical rank.
@@ -49,22 +51,25 @@ def full(x: HTTensor) -> torch.Tensor:
     >>> type(x_unfolded)
     <class 'torch.Tensor'>
     """
-    # Restore leaf frames bottom-up
+    # Restore leaf frames bottom-up, tracking the mode of each row index of a frame
     U = {}
+    modes = {}
     for t in x.dtree.get_nodes(order="bottom-up"):
         if x.dtree.is_leaf(t):
             U[t] = x.U[t]
+            modes[t] = list(t)
 
         else:
             left, right = x.dtree.get_children(t)
 
-            # Compute frame matrix
+            # Compute frame matrix; its rows run over the modes of the left, then the right subtree
             B_scaled = multi_mode_mul_torch(x=x.B[t], matrices={0: U[left], 1: U[right]})
             U[t] = matricize(B_scaled, (0, 1))
+            modes[t] = modes[left] + modes[right]
 
             # Free space
-            del U[left]
-            del U[right]
+            del U[left], U[right], modes[left], modes[right]
 
-    # Dematricise root frame matrix into tensor
-    return dematricize(U[x.dtree.root], x.shape, x.dtree.root)
+    # Dematricise root frame matrix into tensor, following the row order of the root frame
+    root = x.dtree.get_root()
+    return dematricize(U[root], x.shape, modes[root])

@@ -16,7 +16,7 @@ in [Decisions](#decisions).
     `contract` (Q7). For float32, the same multiple of the machine epsilon.
   - `m(x)`, the size of an HT tensor: the product of the spectral norms of its components (transfer tensors
     matricized as `(r_l r_r) × r_t`). It bounds `‖x‖` and equals it for orthonormal components.
-  - `TOL_ORTHOG = 1e-14` for orthonormality: `‖FᵀF − I‖ ≤ TOL_ORTHOG`.
+  - `TOL_ORTHOG = 1e-13` for orthonormality: `‖FᵀF − I‖ ≤ TOL_ORTHOG` (Frobenius norm, Q5).
   - `RTOL_GRAM = sqrt(ε) ≈ 1.5e-8` for singular values computed from Gramian eigenvalues (`truncate_gram`): an
     eigenvalue is accurate to about `ε·‖x‖²`, so its square root to at most `sqrt(ε)·‖x‖` (N5, Q5).
 
@@ -124,7 +124,9 @@ Rules from CLAUDE.md ("Autograd"), covered by `tests/test_autograd.py`.
   Its discarded singular values are `sqrt(λ)` of Gramian eigenvalues with absolute error `ε·‖x‖²`, i.e. accurate
   only to `ε·‖x‖²/σ`, at most `sqrt(ε)·‖x‖`. With `1e-14`, N5 failed at `rtol = 1e-4` (excess `1.7e-13` in CI,
   `2.3e-14` locally, for discarded singular values of order `1e-6`). The test constants (Conventions) are fixed and
-  relaxed centrally if they cause false failures.
+  relaxed centrally if they cause false failures. `TOL_ORTHOG` was relaxed from `1e-14` to `1e-13`: the Frobenius
+  norm of `FᵀF − I` grows with the number of columns (about `ε·k`); `to_htt` produced frames up to `100 × 80` with
+  deviations up to `1.5e-14`, while `orthog` stayed below `2e-15`.
 - **Q6 – `ele_mul` truncates conservatively (N4).** Its tolerance is enforced through an error bound for the
   Kronecker product, which is far from tight for the Hadamard product (measured errors ≈ 3 % of `atol`, ranks may
   exceed those of the exact product). Tests only check N4, not how tight the error or how small the ranks are.
@@ -133,3 +135,8 @@ Rules from CLAUDE.md ("Autograd"), covered by `tests/test_autograd.py`.
   small vector) `‖x‖` can be orders of magnitude smaller than the components, and `norm` deviated by `1e-13 · ‖x‖`.
   Measured against `m(x)`, all operations stay below `1e-14` (standard bound `|fl(AB) − AB| ≲ ε‖A‖‖B‖`); for
   orthonormal components `m(x) = ‖x‖`, so the check is as strict as before.
+- **Q8 – Arbitrary dimension trees.** Every binary tree over the modes is supported, including unbalanced trees,
+  non-contiguous nodes such as `(0, 2) | (1, 3)` and left children with larger modes than their siblings.
+  `full` used to assume mode-ordered rows and returned permuted entries for such trees; this went unnoticed because
+  the test inputs only used canonical trees and those produced by `squeeze`. The strategies now draw arbitrary trees,
+  and `tests/httensor/test_full.py` keeps the regression cases.

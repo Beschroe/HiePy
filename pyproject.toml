@@ -76,7 +76,12 @@ addopts = "-ra --strict-markers --strict-config --doctest-modules"
 markers = [
     "slow: long-running tests (deselect with -m 'not slow')",
 ]
-filterwarnings = ["error"]
+filterwarnings = [
+    "error",
+    # hypothesis warns when printing a large failing input (e.g. a dense tensor); the warning must not replace the
+    # actual assertion error of the failing test
+    "ignore:Generating overly large repr:hypothesis.errors.HypothesisWarning",
+]
 # Floats in doctest outputs only need to match to the precision written in the docstring.
 doctest_optionflags = ["NUMBER"]
 

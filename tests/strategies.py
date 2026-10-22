@@ -9,8 +9,9 @@ The specification varies, independently per node of the tree:
 - the rank, including over-parameterized ranks (larger than the number of rows of the component),
 - the kind of component: ``"orthonormal"``, ``"random"`` (general) or ``"deficient"`` (linearly dependent columns),
 
-so tensors can be orthogonal in some nodes only. In addition, it varies the overall scale, the tree (canonical, or
-non-canonical as produced by ``squeeze``), and includes the zero tensor.
+so tensors can be orthogonal in some nodes only. In addition, it varies the overall scale and includes the zero
+tensor. The dimension tree is canonical, non-canonical as produced by ``squeeze``, or an arbitrary binary tree:
+unbalanced, with non-contiguous nodes such as ``(0, 2) | (1, 3)``, and with the larger modes in the left child.
 """
 
 from __future__ import annotations
@@ -55,6 +56,7 @@ def build_ht(
     zero: bool,
     scale: float,
     orthog: bool,
+    children: dict[hiepy.Node, tuple[hiepy.Node, hiepy.Node]] | None = None,
 ) -> HTTensor:
     """Build an HT tensor from a specification.
 
@@ -66,7 +68,7 @@ def build_ht(
         Positions of singleton modes inserted into ``shape`` before building and squeezed out afterwards; a non-empty
         tuple yields a non-canonical tree.
     nodes
-        Rank and kind per non-root node of ``DimTree.from_order(len(shape) + len(inserted))``.
+        Rank and kind per non-root node of the tree over ``len(shape) + len(inserted)`` modes.
     seed
         Seed of the random components.
     zero
@@ -75,11 +77,14 @@ def build_ht(
         Factor applied to the root transfer tensor.
     orthog
         Whether the result is orthogonal (orthogonalized if necessary). If ``False``, the flag is ``False``.
+    children
+        Child mapping of an arbitrary tree over ``len(shape) + len(inserted)`` modes; ``None`` for the canonical tree.
     """
     ext_shape = list(shape)
     for pos in sorted(inserted):
         ext_shape.insert(pos, 1)
-    dtree = DimTree.from_order(len(ext_shape))
+    order = len(ext_shape)
+    dtree = DimTree.from_order(order) if children is None else DimTree(tuple(range(order)), dict(children))
     gen = torch.Generator().manual_seed(seed)
     U, B, ranks = {}, {}, {}
     all_orthonormal = True
@@ -109,25 +114,49 @@ def build_ht(
 
 
 @st.composite
-def tree_specs(draw: st.DrawFn, max_order: int = MAX_ORDER) -> tuple[tuple[int, ...], tuple[int, ...]]:
-    """Shape and positions of inserted singleton modes (non-empty: non-canonical tree after squeeze)."""
+def arbitrary_trees(draw: st.DrawFn, order: int) -> dict[hiepy.Node, tuple[hiepy.Node, hiepy.Node]]:
+    """Child mapping of an arbitrary binary tree over ``order`` modes: every split of a node into two non-empty
+    parts is possible (unbalanced, non-contiguous), and either part may be the left child."""
+    children = {}
+    stack = [tuple(range(order))]
+    while stack:
+        node = stack.pop()
+        if len(node) == 1:
+            continue
+        perm = draw(st.permutations(node))
+        k = draw(st.integers(1, len(node) - 1))
+        left, right = tuple(sorted(perm[:k])), tuple(sorted(perm[k:]))
+        children[node] = (left, right)
+        stack += [left, right]
+    return children
+
+
+type TreeSpec = tuple[tuple[int, ...], tuple[int, ...], dict[hiepy.Node, tuple[hiepy.Node, hiepy.Node]] | None]
+
+
+@st.composite
+def tree_specs(draw: st.DrawFn, max_order: int = MAX_ORDER) -> TreeSpec:
+    """Shape, positions of inserted singleton modes (squeezed out after building) and an optional arbitrary tree
+    over the extended order (``None``: canonical)."""
     shape = draw(shapes(max_order=max_order))
     nr_inserted = draw(st.integers(0, 2))
     positions = draw(st.lists(st.integers(0, len(shape)), min_size=nr_inserted, max_size=nr_inserted))
     inserted = tuple(sorted(p + i for i, p in enumerate(sorted(positions))))
-    return shape, inserted
+    children = draw(arbitrary_trees(len(shape) + nr_inserted)) if draw(st.booleans()) else None
+    return shape, inserted, children
 
 
 @st.composite
 def ht_tensors(
     draw: st.DrawFn,
-    tree: tuple[tuple[int, ...], tuple[int, ...]] | None = None,
+    tree: TreeSpec | None = None,
     orthog: bool | None = None,
     max_order: int = MAX_ORDER,
 ) -> HTTensor:
     """Random float64 HT tensor, see the module docstring; orthogonal or not, as drawn unless fixed."""
-    shape, inserted = tree if tree is not None else draw(tree_specs(max_order=max_order))
-    dtree = DimTree.from_order(len(shape) + len(inserted))
+    shape, inserted, children = tree if tree is not None else draw(tree_specs(max_order=max_order))
+    order = len(shape) + len(inserted)
+    dtree = DimTree.from_order(order) if children is None else DimTree(tuple(range(order)), children)
     nodes = {
         t: (draw(st.integers(1, MAX_RANK)), draw(st.sampled_from(KINDS)))
         for t in dtree.get_nodes()
@@ -141,6 +170,7 @@ def ht_tensors(
         zero=draw(st.sampled_from([False] * 9 + [True])),
         scale=draw(st.sampled_from(SCALES)),
         orthog=draw(st.booleans()) if orthog is None else orthog,
+        children=children,
     )
     note(f"build_ht(**{spec})")
     return build_ht(**spec)  # type: ignore[arg-type]
