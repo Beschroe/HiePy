@@ -149,7 +149,7 @@ EXTRA_OPS: dict[str, Callable[[HTTensor], Result]] = {
 }
 
 RESULT_OPS: dict[str, Callable[[HTTensor], Result]] = {
-    **{name: (lambda x, op=op: op.call(x, x)) for name, op in OPS.items() if op.out_dtype is None},
+    **{name: (lambda x, op=op: op.run(x, x)) for name, op in OPS.items() if name != "to"},
     **EXTRA_OPS,
 }
 

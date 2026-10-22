@@ -15,18 +15,22 @@ from tests.strategies import ht_pairs, ht_tensors, shapes
 
 
 @pytest.mark.parametrize("name", OPS)
-@given(pair=ht_pairs())
-def test_operation_results_are_valid(name: str, pair: tuple[HTTensor, HTTensor]):
-    """S1, S2, S3, D1: every HT result matches its tree, has consistent ranks, order >= 2 and one dtype/device."""
+@given(pair=ht_pairs(), data=st.data())
+def test_operation_results_are_valid(name: str, pair: tuple[HTTensor, HTTensor], data: st.DataObject):
+    """S1, S2, S3, S4, D1: every HT result matches its tree, has consistent ranks, order >= 2 and one dtype/device;
+    a result of the same order keeps the tree (only removing modes may change it)."""
     x, y = pair
     op = OPS[name]
-    result = ht_result(op.call(x, y))
+    arg = data.draw(op.args(x), label="arg")
+    result = ht_result(op.call(x, y, arg))
     if result is None:
         return
     assert_valid_structure(result)
     assert result.order >= 2
-    assert result.dtype == (op.out_dtype or x.dtype)
+    assert result.dtype == (op.out_dtype(arg) or x.dtype)
     assert result.device == x.device
+    if result.order == x.order:
+        assert result.dtree == x.dtree
 
 
 @pytest.mark.parametrize("name", FACTORIES)
@@ -46,16 +50,6 @@ def test_to_htt_builds_canonical_tree(shape: tuple[int, ...], seed: int):
     x = hiepy.to_htt(torch.randn(shape, generator=gen, dtype=torch.float64), {"atol": 0.0})
     assert_valid_structure(x)
     assert x.dtree == DimTree.from_order(len(shape))
-
-
-@pytest.mark.parametrize("name", [name for name, op in OPS.items() if op.keeps_tree])
-@given(pair=ht_pairs())
-def test_tree_is_preserved(name: str, pair: tuple[HTTensor, HTTensor]):
-    """S4: operations other than ``squeeze`` and integer indexing keep the dimension tree."""
-    x, y = pair
-    result = ht_result(OPS[name].call(x, y))
-    if result is not None:
-        assert result.dtree == x.dtree
 
 
 @given(x=ht_tensors())

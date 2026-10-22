@@ -11,8 +11,11 @@ in [Decisions](#decisions).
 - **Frame of node t**: `U[t]` for a leaf, otherwise $(U_{t_l} \otimes U_{t_r}) \cdot \mathrm{mat}(B_t)$.
 - **Tolerances**: numerical checks run in float64 with constants defined once in `tests/helpers.py`, independent of
   order and rank (Q5):
-  - `RTOL_EXACT = 1e-14` for exact operations: `‖result − reference‖ ≤ RTOL_EXACT · ‖reference‖`; for a reference
-    close to zero (e.g. `x − x`) the input norm is used instead.
+  - `RTOL_EXACT = 1e-14` for exact operations: `‖result − reference‖ ≤ RTOL_EXACT · scale`, where `scale` is the
+    larger of `‖reference‖` and the size of the inputs entering it, e.g. `m(x) + m(y)` for `x − y`, `m(x)·m(y)` for
+    `contract` (Q7). For float32, the same multiple of the machine epsilon.
+  - `m(x)`, the size of an HT tensor: the product of the spectral norms of its components (transfer tensors
+    matricized as `(r_l r_r) × r_t`). It bounds `‖x‖` and equals it for orthonormal components.
   - `TOL_ORTHOG = 1e-14` for orthonormality: `‖FᵀF − I‖ ≤ TOL_ORTHOG`.
 
 ## S – Structure
@@ -118,3 +121,8 @@ Rules from CLAUDE.md ("Autograd"), covered by `tests/test_autograd.py`.
 - **Q6 – `ele_mul` truncates conservatively (N4).** Its tolerance is enforced through an error bound for the
   Kronecker product, which is far from tight for the Hadamard product (measured errors ≈ 3 % of `atol`, ranks may
   exceed those of the exact product). Tests only check N4, not how tight the error or how small the ranks are.
+- **Q7 – Scale of exact comparisons (N1, N2).** Rounding errors scale with the size of the components, not with
+  `‖x‖`: in a representation with cancellation (e.g. a rank-deficient leaf whose columns the parent combines to a
+  small vector) `‖x‖` can be orders of magnitude smaller than the components, and `norm` deviated by `1e-13 · ‖x‖`.
+  Measured against `m(x)`, all operations stay below `1e-14` (standard bound `|fl(AB) − AB| ≲ ε‖A‖‖B‖`); for
+  orthonormal components `m(x) = ‖x‖`, so the check is as strict as before.

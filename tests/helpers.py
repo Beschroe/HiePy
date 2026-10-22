@@ -59,13 +59,21 @@ def assert_orthogonal(x: HTTensor) -> None:
         assert deviation <= TOL_ORTHOG, f"frame of node {t} deviates from orthonormality by {deviation:.2e}"
 
 
-def assert_close(actual: torch.Tensor, expected: torch.Tensor, scale: float | None = None) -> None:
-    """Check ``‖actual − expected‖ ≤ RTOL_EXACT · scale``, where ``scale`` defaults to ``‖expected‖``."""
+def rtol_exact(dtype: torch.dtype) -> float:
+    """``RTOL_EXACT`` for float64; for other dtypes the same multiple of the machine epsilon."""
+    return RTOL_EXACT * torch.finfo(dtype).eps / torch.finfo(torch.float64).eps
+
+
+def assert_close(
+    actual: torch.Tensor, expected: torch.Tensor, scale: float | None = None, dtype: torch.dtype = torch.float64
+) -> None:
+    """Check ``‖actual − expected‖ ≤ rtol_exact(dtype) · scale``, where ``scale`` defaults to ``‖expected‖``."""
     assert actual.shape == expected.shape
     if scale is None:
         scale = torch.linalg.norm(expected).item()
+    rtol = rtol_exact(dtype)
     error = torch.linalg.norm(actual - expected).item()
-    assert error <= RTOL_EXACT * scale, f"error {error:.2e} exceeds {RTOL_EXACT:.0e} · {scale:.2e}"
+    assert error <= rtol * scale, f"error {error:.2e} exceeds {rtol:.0e} · {scale:.2e}"
 
 
 @dataclass(frozen=True)

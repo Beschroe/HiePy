@@ -23,7 +23,7 @@ SHAPE = (3, 4, 5, 2)
 type Op = Callable[[HTTensor, HTTensor], Result]
 
 # copy and detach cut the graph by design (A1: opt-out); all other operations must propagate gradients.
-OPS: dict[str, Op] = {name: op.call for name, op in REGISTRY.items() if name not in ("copy", "detach")}
+OPS: dict[str, Op] = {name: op.run for name, op in REGISTRY.items() if name not in ("copy", "detach")}
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~ Helpers and fixtures ~~~~~~~~~~~~~~~~~~~~~~~~~
