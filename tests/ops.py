@@ -181,7 +181,7 @@ def _selects_all(key: IndexKey | tuple[IndexKey, ...], shape: tuple[int, ...]) -
 def _squeezed_dims(shape: tuple[int, ...], dims: tuple[int, ...] | None = None) -> list[int]:
     """Modes removed by ``squeeze(x, dims)``: the requested (default: all) singletons, except the highest ones needed
     to keep order >= 2. If all modes are requested, all are removed and the result is a dense 0-d tensor."""
-    removed = [i for i, n in enumerate(shape) if n == 1] if dims is None else sorted(set(dims))
+    removed = [i for i, n in enumerate(shape) if n == 1] if dims is None else sorted({d % len(shape) for d in dims})
     if len(removed) < len(shape):
         while len(shape) - len(removed) < 2:
             removed.remove(max(removed))
@@ -189,12 +189,14 @@ def _squeezed_dims(shape: tuple[int, ...], dims: tuple[int, ...] | None = None) 
 
 
 def _squeeze_args(x: HTTensor) -> st.SearchStrategy[int | tuple[int, ...] | None]:
-    """``None`` (all singletons), a single singleton mode, or any subset of the singleton modes."""
+    """``None`` (all singletons), a single singleton mode, or any subset of the singleton modes, each mode given
+    positively or negatively (as in torch)."""
     singletons = [i for i, n in enumerate(x.shape) if n == 1]
     if not singletons:
         return st.sampled_from([None, ()])
-    subsets = st.lists(st.sampled_from(singletons), unique=True).map(tuple)
-    return st.one_of(st.none(), st.sampled_from(singletons), subsets)
+    candidates = singletons + [d - x.order for d in singletons]
+    subsets = st.lists(st.sampled_from(candidates), unique_by=lambda d: d % x.order).map(tuple)
+    return st.one_of(st.none(), st.sampled_from(candidates), subsets)
 
 
 def _as_tuple(dims: int | tuple[int, ...] | None) -> tuple[int, ...] | None:
