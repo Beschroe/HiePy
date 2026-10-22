@@ -99,8 +99,8 @@ def ele_mul(x: HTTensor, y: HTTensor, opts: TruncOpts = {}) -> HTTensor:
     >>> prod_ht.rank
     {(0, 1, 2): 1, (0,): 2, (1,): 2, (2,): 2, (0, 1): 2}
     >>> rel_err = torch.linalg.norm(prod_torch-prod_ht.full()) / torch.linalg.norm(prod_torch)
-    >>> rel_err
-    tensor(6.8152e-16)
+    >>> bool(rel_err < 1e-14)
+    True
     >>> prod_ht = hiepy.ele_mul(x_ht,y_ht,opts={"max_rank":1})
     >>> prod_ht.rank
     {(0, 1, 2): 1, (0,): 1, (1,): 1, (2,): 1, (0, 1): 1}

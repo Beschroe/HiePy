@@ -183,8 +183,10 @@ docstrings referenced in the functionality map below.
   `addopts` includes `--doctest-modules`). Every example starts, right after its imports, with
   `>>> torch.set_default_dtype(torch.float64)`, so users can reproduce the printed results; expected
   outputs are therefore float64 (no `dtype=` suffix). Keep this line in new examples. The root
-  `conftest.py` only restores the previous default dtype after each doctest. Printed results (errors,
-  norms) are shown exactly; outputs of unseeded random examples are illustrative only and marked
+  `conftest.py` only restores the previous default dtype after each doctest. Rounding-level results
+  (approximation errors, sign-ambiguous singular vectors) depend on torch version and BLAS, so examples
+  check them against a bound (`bool(err <= tol)` → `True`, `torch.allclose(...)`) instead of printing
+  them; other floats are matched with the `NUMBER` doctest flag (precision as written); outputs of unseeded random examples are illustrative only and marked
   `# doctest: +SKIP`.
 - Commented-out legacy code (German comments, old `hiepy.core` import paths, old `Node` objects
   with `.dims`) still exists in several modules. It is not part of the API; do not revive it

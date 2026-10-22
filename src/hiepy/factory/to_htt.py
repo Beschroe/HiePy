@@ -67,8 +67,8 @@ def to_htt(x: torch.Tensor, opts: TruncOpts) -> HTTensor:
     >>> # Check truncation accuracy
     >>> torch.allclose(x, x_ht.full())
     True
-    >>> torch.linalg.norm(x-x_ht.full())
-    tensor(1.1782e-10)
+    >>> bool(torch.linalg.norm(x-x_ht.full()) <= 1e-8)
+    True
     """
     # validity checks
     if x.dim() < 2:

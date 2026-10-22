@@ -89,7 +89,7 @@ def get(x: HTTensor, key: IndexKey | tuple[IndexKey, ...]) -> HTTensor | torch.T
     >>> x_ht[0, 1, 2]
     tensor(6.0000)
     >>> x_ht[-1, -1, -1]
-    tensor(27.)
+    tensor(27.0000)
     """
     shape = x.shape
     entries = _normalize_key(key, shape)

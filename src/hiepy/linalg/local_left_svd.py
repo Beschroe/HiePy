@@ -79,11 +79,11 @@ def local_left_svd(x: HTTensor) -> dict[Node, tuple[torch.Tensor, torch.Tensor]]
     >>> x = torch.randn(2,3,4,generator=gen)
     >>> x_ht = hiepy.to_htt(x, {"atol":1e-8})
     >>> t = (0,1)
-    >>> hiepy.local_left_svd(x_ht)[t]
-    (tensor([[-1.0000e+00, -1.1928e-18,  2.1948e-17, -1.1690e-17],
-            [ 1.1928e-18, -1.0000e+00,  2.7756e-16,  3.4694e-17],
-            [-2.1948e-17, -4.4409e-16, -1.0000e+00, -5.2909e-17],
-            [-1.1690e-17,  4.8572e-17, -5.2909e-17,  1.0000e+00]]), tensor([3.6357, 1.3479, 0.5663, 0.3282]))
+    >>> U, s = hiepy.local_left_svd(x_ht)[t]
+    >>> s
+    tensor([3.6357, 1.3479, 0.5663, 0.3282])
+    >>> torch.allclose(U.T @ U, torch.eye(4))
+    True
     """
     x = orthog(x)
 

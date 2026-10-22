@@ -80,8 +80,8 @@ def truncate(x: HTTensor, opts: TruncOpts, method: str = "svd") -> tuple[HTTenso
     >>> x_appr, _ = hiepy.truncate(x=x,opts=opts,method="svd")
     >>> x_appr.rank
     {(0, 1, 2): 1, (0,): 1, (1,): 1, (2,): 1, (0, 1): 1}
-    >>> hiepy.norm(x-x_appr) / hiepy.norm(x)
-    tensor(7.0891e-16)
+    >>> bool(hiepy.norm(x-x_appr) / hiepy.norm(x) <= 1e-8)
+    True
     """
     if method == "gram":
         return truncate_gram(x, opts)

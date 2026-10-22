@@ -77,6 +77,8 @@ markers = [
     "slow: long-running tests (deselect with -m 'not slow')",
 ]
 filterwarnings = ["error"]
+# Floats in doctest outputs only need to match to the precision written in the docstring.
+doctest_optionflags = ["NUMBER"]
 
 [tool.coverage.run]
 source = ["hiepy"]
