@@ -18,8 +18,8 @@ FLAGGED_OPS = [name for name, op in OPS.items() if op.flag is not None]
 @pytest.mark.parametrize("name", FLAGGED_OPS)
 @given(pair=ht_pairs(), data=st.data())
 def test_operation_sets_flag(name: str, pair: tuple[HTTensor, HTTensor], data: st.DataObject):
-    """O1, O2: each operation sets ``is_orthog`` as listed in the catalog, and a ``True`` flag is sound (checked in
-    float64). Inputs include tensors that are orthogonal in some nodes only."""
+    """O1, O2: each operation sets ``is_orthog`` as listed in the catalog, and a ``True`` flag is sound (in the
+    precision of the data). Inputs include tensors that are orthogonal in some nodes only."""
     x, y = pair
     op = OPS[name]
     arg = data.draw(op.args(x), label="arg")
@@ -28,8 +28,8 @@ def test_operation_sets_flag(name: str, pair: tuple[HTTensor, HTTensor], data: s
         return
     assert op.flag is not None
     assert result.is_orthog == op.flag(x, arg)
-    if result.is_orthog and result.dtype == torch.float64:
-        assert_orthogonal(result)
+    if result.is_orthog:
+        assert_orthogonal(result, dtypes=(x.dtype, y.dtype, result.dtype))
 
 
 @pytest.mark.parametrize("name", FACTORIES)

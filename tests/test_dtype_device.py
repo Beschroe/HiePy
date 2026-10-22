@@ -26,6 +26,7 @@ import hiepy
 from hiepy import HTTensor
 from tests.helpers import components, cuda
 from tests.ops import FACTORIES, OPS, Result
+from tests.tolerances import assert_exact
 
 SHAPE = (3, 4, 5)
 FLOAT_DTYPES = [torch.float32, torch.float64]
@@ -76,7 +77,7 @@ def test_factory_respects_device(name: str):
 def test_constant_value_is_cast_to_dtype():
     x = hiepy.constant(SHAPE, c=torch.tensor(1.5, dtype=torch.float64), dtype=torch.float32)
     _assert_components(x, torch.float32)
-    assert torch.allclose(x.full(), torch.full(SHAPE, 1.5))
+    assert_exact(x.full(), torch.full(SHAPE, 1.5))
 
 
 def test_arange_values_in_float32():
@@ -111,7 +112,7 @@ def test_to_changes_dtype(src: torch.dtype, dst: torch.dtype):
     _assert_components(y, dst)
     _assert_components(x, src)
     assert y.is_orthog == x.is_orthog
-    assert torch.allclose(y.full().to(src), x.full(), atol=1e-5)
+    assert_exact(y.full().to(src), x.full(), dtypes=(src, dst))
 
 
 def test_to_changes_device():
@@ -196,7 +197,7 @@ def test_binary_op_promotes_dtype(name: str, dtype_x: torch.dtype, dtype_y: torc
 def test_add_mixed_dtypes_is_correct(dtype_x: torch.dtype, dtype_y: torch.dtype):
     x, y = _rand(dtype_x, seed=0), _rand(dtype_y, seed=1)
     expected = x.full().double() + y.full().double()
-    assert torch.allclose((x + y).full(), expected, atol=1e-6)
+    assert_exact((x + y).full(), expected, dtypes=(dtype_x, dtype_y))
 
 
 @pytest.mark.parametrize(("dtype_x", "dtype_y"), MIXED_DTYPES)
@@ -204,7 +205,8 @@ def test_contract_promotes_dtype(dtype_x: torch.dtype, dtype_y: torch.dtype):
     x, y = _rand(dtype_x, seed=0), _rand(dtype_y, seed=1)
     result = hiepy.contract(x, y)
     assert result.dtype == torch.float64
-    assert torch.allclose(result, (x.full().double() * y.full().double()).sum(), atol=1e-6)
+    expected = (x.full().double() * y.full().double()).sum()
+    assert_exact(result, expected, scale=x.norm().item() * y.norm().item(), dtypes=(dtype_x, dtype_y))
 
 
 @pytest.mark.parametrize(("dtype_x", "dtype_A"), MIXED_DTYPES)

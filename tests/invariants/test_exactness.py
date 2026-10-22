@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import pytest
-import torch
 from hypothesis import given
 from hypothesis import strategies as st
 
 from hiepy import HTTensor
-from tests.helpers import assert_close
 from tests.ops import OPS
 from tests.strategies import ht_pairs
+from tests.tolerances import assert_exact
 
 EXACT_OPS = [name for name, op in OPS.items() if op.dense is not None]
 
@@ -27,5 +26,5 @@ def test_matches_dense_reference(name: str, pair: tuple[HTTensor, HTTensor], dat
     result = op.call(x, y, arg)
     actual = result.full() if isinstance(result, HTTensor) else result
     expected = op.dense(x.full(), y.full(), arg)
-    scale = max(torch.linalg.norm(expected.to(torch.float64)).item(), op.magnitude(x, y, arg))
-    assert_close(actual.to(torch.float64), expected.to(torch.float64), scale=scale, dtype=actual.dtype)
+    dtypes = (x.dtype, y.dtype, actual.dtype)
+    assert_exact(actual, expected, scale=op.magnitude(x, y, arg), scale_label="Op.magnitude", dtypes=dtypes)

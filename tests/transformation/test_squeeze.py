@@ -6,11 +6,11 @@ Invariants covered (``tests/INVARIANTS.md``): N1 (agreement with the dense refer
 from __future__ import annotations
 
 import pytest
-import torch
 
 import hiepy
 from hiepy import HTTensor
 from tests.helpers import assert_valid_structure, make_dense_htt
+from tests.tolerances import assert_exact
 
 SHAPE = (1, 3, 1, 4, 1)
 
@@ -35,7 +35,7 @@ def test_matches_torch(dims: int | tuple[int, ...], torch_dims: tuple[int, ...])
     assert isinstance(result, HTTensor)
     assert_valid_structure(result)
     assert result.shape == tuple(expected.shape)
-    assert torch.allclose(result.full(), expected, atol=1e-12)
+    assert_exact(result.full(), expected)
 
 
 @pytest.mark.parametrize("dims", [5, -6, (0, 7), [-1, -8]], ids=repr)

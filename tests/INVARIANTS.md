@@ -9,16 +9,20 @@ in [Decisions](#decisions).
 - **Operation**: a public function returning an `HTTensor` (for `truncate*`: the first entry of the returned tuple),
   together with the `HTTensor` methods and operators that wrap it.
 - **Frame of node t**: `U[t]` for a leaf, otherwise $(U_{t_l} \otimes U_{t_r}) \cdot \mathrm{mat}(B_t)$.
-- **Tolerances**: numerical checks run in float64 with constants defined once in `tests/helpers.py`, independent of
-  order and rank (Q5):
-  - `RTOL_EXACT = 1e-14` for exact operations: `‖result − reference‖ ≤ RTOL_EXACT · scale`, where `scale` is the
-    larger of `‖reference‖` and the size of the inputs entering it, e.g. `m(x) + m(y)` for `x − y`, `m(x)·m(y)` for
-    `contract` (Q7). For float32, the same multiple of the machine epsilon.
+- **Error model** (`tests/tolerances.py`, Q9): every numerical check has the form
+  `error ≤ bound + rel · scale`.
+  - `bound`: the mathematical bound of the invariant (0 for exact results).
+  - `rel`: relative rounding error, from the machine epsilon `ε` of the least precise dtype involved and the
+    accuracy class of the computed quantity: `SAFETY · ε` for direct computations (`SAFETY = 45`, i.e. about
+    `1e-14` in float64), `sqrt(ε)` for singular values computed from Gramian eigenvalues (`truncate_gram`), whose
+    eigenvalues are only accurate to `ε·‖x‖²` (Q5).
+  - `scale`: the size of the quantities entering the computation. For exact results the larger of `‖reference‖`
+    and the size of the inputs, e.g. `m(x) + m(y)` for `x − y`, `m(x)·m(y)` for `contract` (Q7); for approximations
+    `m(x)`; for orthonormality `‖FᵀF − I‖_F` the number of columns `k`.
   - `m(x)`, the size of an HT tensor: the product of the spectral norms of its components (transfer tensors
     matricized as `(r_l r_r) × r_t`). It bounds `‖x‖` and equals it for orthonormal components.
-  - `TOL_ORTHOG = 1e-13` for orthonormality: `‖FᵀF − I‖ ≤ TOL_ORTHOG` (Frobenius norm, Q5).
-  - `RTOL_GRAM = sqrt(ε) ≈ 1.5e-8` for singular values computed from Gramian eigenvalues (`truncate_gram`): an
-    eigenvalue is accurate to about `ε·‖x‖²`, so its square root to at most `sqrt(ε)·‖x‖` (N5, Q5).
+
+  The only tuning knob is `SAFETY`; a failing check reports `bound`, `rel` and `scale` separately.
 
 ## S – Structure
 
@@ -54,8 +58,8 @@ A wrong `True` silently breaks `norm` and `gramians`; a wrong `False` only costs
 | N1 | `result.full()` equals the dense counterpart of the operation applied to `x.full()`. | `add`, `sub`, `scalar_mul`, `mode_mul`, `ele_mode_mul`, `ele_mul` without `opts`, `orthog`, `squeeze`, `get`, `copy`, `clone`, `detach`, `to` (in the target precision); `zeros`, `ones`, `constant`, `arange` |
 | N2 | `contract(x, y)` equals `(x.full() * y.full()).sum()`; `norm(x)` equals `torch.linalg.norm(x.full())`. | `contract`, `norm` |
 | N3 | Round trips are exact: `to_htt(T, {"atol": 0}).full() ≈ T`; `load(save(x))` reproduces components, `dtree` and `is_orthog`; `dematricize ∘ matricize` and `devectorize ∘ vectorize` are the identity. | `to_htt`, `save`/`load`, `matricize`, `vectorize` |
-| N4 | **Error vs. tolerance**: `‖x.full() − result.full()‖ ≤ atol + rtol · ‖x‖ + RTOL_EXACT · m(x)` (a missing key counts as 0) if no `max_rank` is given; the last term only absorbs rounding (Q5). Tested down to `atol = 1e-12·‖x‖` and `rtol = 1e-12`; `truncate_gram` and `ele_mul` only down to `1e-8` (Q4). | `to_htt`, `truncate_svd`, `truncate_gram`, `ele_mul` (`atol` only, E8, Q6) |
-| N5 | **Error vs. discarded singular values**: `‖x.full() − result.full()‖ ≤ sqrt(Σ_t ‖σ_t‖²) + margin · m(x)`, where `σ_t` are the returned discarded singular values and `margin` is `RTOL_EXACT` for `truncate_svd` and `RTOL_GRAM` for `truncate_gram` (Q5). Also with `max_rank`; same tolerance range as N4. | `truncate_svd`, `truncate_gram` |
+| N4 | **Error vs. tolerance**: `‖x.full() − result.full()‖ ≤ atol + rtol · ‖x‖` (a missing key counts as 0) if no `max_rank` is given, up to rounding of order `m(x)` (Conventions, Q5). Tested down to `atol = 1e-12·‖x‖` and `rtol = 1e-12`; `truncate_gram` and `ele_mul` only down to `1e-8` (Q4). | `to_htt`, `truncate_svd`, `truncate_gram`, `ele_mul` (`atol` only, E8, Q6) |
+| N5 | **Error vs. discarded singular values**: `‖x.full() − result.full()‖ ≤ sqrt(Σ_t ‖σ_t‖²)`, where `σ_t` are the returned discarded singular values, up to rounding of order `m(x)` in the accuracy class of the `σ_t` (Gramian for `truncate_gram`, Q5). Also with `max_rank`; same tolerance range as N4. | `truncate_svd`, `truncate_gram` |
 | N6 | `rank[t] ≤ max_rank` for every non-root node. | `to_htt`, `truncate_svd`, `truncate_gram`, `ele_mul` |
 | N7 | `orthog` does not increase any rank. | `orthog` |
 | N8 | `randn` has ranks ≤ `rank`; `hilbert` approximates `1 / (i_0 + … + i_{d−1} + d)`, with a smaller error for `M = 10` than for `M = 3`. | `randn`, `hilbert` |
@@ -117,16 +121,13 @@ Rules from CLAUDE.md ("Autograd"), covered by `tests/test_autograd.py`.
   `X_t X_tᵀ`, so singular values below about `sqrt(ε)·‖x‖ ≈ 1e-8·‖x‖` cannot be resolved (stated in its
   docstring). Hence `truncate_gram` and `ele_mul`, which also selects ranks from Gramians, are tested only down to
   `1e-8`.
-- **Q5 – Rounding margin in N4 and N5.** `RTOL_EXACT · m(x)` absorbs rounding: without it, N5 failed where nothing
-  was truncated and both sides were at rounding level (`1e-15` vs. `2e-16`). It is measured in `m(x)` rather than
-  `‖x‖` because representations with cancellation produce rounding errors of order `m(x)` (Q7); for orthonormal
-  components `m(x) = ‖x‖`, so the margin is `1e-14 · ‖x‖`. Exception: N5 for `truncate_gram` uses `RTOL_GRAM · m(x)`.
-  Its discarded singular values are `sqrt(λ)` of Gramian eigenvalues with absolute error `ε·‖x‖²`, i.e. accurate
-  only to `ε·‖x‖²/σ`, at most `sqrt(ε)·‖x‖`. With `1e-14`, N5 failed at `rtol = 1e-4` (excess `1.7e-13` in CI,
-  `2.3e-14` locally, for discarded singular values of order `1e-6`). The test constants (Conventions) are fixed and
-  relaxed centrally if they cause false failures. `TOL_ORTHOG` was relaxed from `1e-14` to `1e-13`: the Frobenius
-  norm of `FᵀF − I` grows with the number of columns (about `ε·k`); `to_htt` produced frames up to `100 × 80` with
-  deviations up to `1.5e-14`, while `orthog` stayed below `2e-15`.
+- **Q5 – Rounding margin in N4 and N5.** A margin of `SAFETY·ε · m(x)` absorbs rounding: without it, N5 failed
+  where nothing was truncated and both sides were at rounding level (`1e-15` vs. `2e-16`). It is measured in `m(x)`
+  rather than `‖x‖` because representations with cancellation produce rounding errors of order `m(x)` (Q7); for
+  orthonormal components `m(x) = ‖x‖`. N5 for `truncate_gram` uses the Gramian accuracy class `sqrt(ε) · m(x)`: its
+  discarded singular values are `sqrt(λ)` of Gramian eigenvalues with absolute error `ε·‖x‖²`, i.e. accurate only to
+  `ε·‖x‖²/σ`, at most `sqrt(ε)·‖x‖`. With the rounding class, N5 failed at `rtol = 1e-4` (excess `1.7e-13` in CI,
+  `2.3e-14` locally, for discarded singular values of order `1e-6`).
 - **Q6 – `ele_mul` truncates conservatively (N4).** Its tolerance is enforced through an error bound for the
   Kronecker product, which is far from tight for the Hadamard product (measured errors ≈ 3 % of `atol`, ranks may
   exceed those of the exact product). Tests only check N4, not how tight the error or how small the ranks are.
@@ -140,3 +141,11 @@ Rules from CLAUDE.md ("Autograd"), covered by `tests/test_autograd.py`.
   `full` used to assume mode-ordered rows and returned permuted entries for such trees; this went unnoticed because
   the test inputs only used canonical trees and those produced by `squeeze`. The strategies now draw arbitrary trees,
   and `tests/httensor/test_full.py` keeps the regression cases.
+- **Q9 – Central error model.** Every tolerance is derived in `tests/tolerances.py` from the error model in the
+  Conventions instead of being chosen per test. Before, almost every false failure came from a source of rounding
+  error that a test did not model (cancellation in the operation or in the representation, Gramian accuracy, growth
+  of `‖FᵀF − I‖_F` with the number of columns, float32 data), and the fixes were scattered over several files.
+  Orthonormality is checked against `SAFETY·ε · k` (previously a constant, relaxed from `1e-14` to `1e-13` after
+  `to_htt` produced deviations up to `1.5e-14` for frames with `k = 80` columns; `orthog` stays below `2e-15`). The
+  precision is that of the least precise dtype involved, so float32 data converted to float64 is compared at float32
+  accuracy.
