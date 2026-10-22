@@ -51,6 +51,9 @@ jobs:
         torch: ["min", "latest"]
     env:
       HYPOTHESIS_PROFILE: ci
+      # One torch thread: the tests use many small tensors, for which threading only adds overhead (locally 112 s
+      # with 1 thread vs. 133 s with 16, at a sixth of the CPU time) and makes run times depend on runner load.
+      OMP_NUM_THREADS: "1"
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
