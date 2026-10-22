@@ -13,11 +13,17 @@ import torch
 
 import hiepy
 from hiepy import HTTensor
+from tests.helpers import components
+from tests.ops import FACTORIES
+from tests.ops import OPS as REGISTRY
+from tests.ops import Result
 
 SHAPE = (3, 4, 5, 2)
 
-type Result = HTTensor | torch.Tensor | tuple[HTTensor, dict[hiepy.Node, torch.Tensor]] | dict
 type Op = Callable[[HTTensor, HTTensor], Result]
+
+# copy and detach cut the graph by design (A1: opt-out); all other operations must propagate gradients.
+OPS: dict[str, Op] = {name: op.run for name, op in REGISTRY.items() if name not in ("copy", "detach")}
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~ Helpers and fixtures ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -36,10 +42,6 @@ def _rand(seed: int, requires_grad: bool = False) -> HTTensor:
     return hiepy.ele_mode_mul(x, v, 0).requires_grad_(requires_grad)
 
 
-def _components(x: HTTensor) -> list[torch.Tensor]:
-    return [*x.U.values(), *x.B.values()]
-
-
 def _to_scalar(result: Result) -> torch.Tensor:
     """Reduce the result of an operation to a scalar that depends on all of its values."""
     if isinstance(result, tuple):
@@ -51,42 +53,22 @@ def _to_scalar(result: Result) -> torch.Tensor:
     return (result**2).sum()
 
 
-OPS: dict[str, Op] = {
-    "add": lambda x, y: x + y,
-    "sub": lambda x, y: x - y,
-    "scalar_mul": lambda x, y: 3.0 * x,
-    "mode_mul": lambda x, y: hiepy.mode_mul(x, torch.ones(2, SHAPE[1], dtype=x.dtype), 1),
-    "ele_mode_mul": lambda x, y: hiepy.ele_mode_mul(x, torch.arange(SHAPE[2], dtype=x.dtype), 2),
-    "ele_mul": lambda x, y: x * y,
-    "ele_mul_truncated": lambda x, y: hiepy.ele_mul(x, y, {"max_rank": 2}),
-    "contract": lambda x, y: x @ y,
-    "norm": lambda x, y: hiepy.norm(x),
-    "orthog": lambda x, y: hiepy.orthog(x),
-    "truncate_svd": lambda x, y: hiepy.truncate_svd(x, {"max_rank": 1}),
-    "truncate_gram": lambda x, y: hiepy.truncate_gram(x, {"max_rank": 1}),
-    "local_left_svd": lambda x, y: hiepy.local_left_svd(x),
-    "full": lambda x, y: x.full(),
-    "get": lambda x, y: x[1:3, 0],
-    "get_dense": lambda x, y: x[1, 0, 2],
-    "squeeze": lambda x, y: hiepy.squeeze(x[1:2]),
-    "to": lambda x, y: x.to(dtype=torch.float32),
-}
-
-
 # ~~~~~~~~~~~~~~~~~~~~~~~~~ Gradient propagation ~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
 @pytest.mark.parametrize("op", OPS.values(), ids=OPS.keys())
 def test_gradients_reach_input_components(op: Op):
+    """A2: gradients reach the input components (no implicit detach)."""
     x, y = _rand(0, requires_grad=True), _rand(1, requires_grad=True)
     _to_scalar(op(x, y)).backward()
-    grads = [t.grad for t in _components(x)]
+    grads = [t.grad for t in components(x)]
     assert all(g is not None and torch.isfinite(g).all() for g in grads)
     assert any(torch.any(g != 0) for g in grads)  # type: ignore[arg-type]
 
 
 @pytest.mark.parametrize("op", OPS.values(), ids=OPS.keys())
 def test_no_graph_without_requires_grad(op: Op):
+    """A1: no graph is recorded if no input requires gradients."""
     x, y = _rand(0), _rand(1)
     assert not x.requires_grad
     assert not _to_scalar(op(x, y)).requires_grad
@@ -94,22 +76,15 @@ def test_no_graph_without_requires_grad(op: Op):
 
 @pytest.mark.parametrize("op", OPS.values(), ids=OPS.keys())
 def test_no_graph_under_no_grad(op: Op):
+    """A1: no graph is recorded with autograd disabled."""
     x, y = _rand(0, requires_grad=True), _rand(1, requires_grad=True)
     with torch.no_grad():
         assert not _to_scalar(op(x, y)).requires_grad
 
 
-@pytest.mark.parametrize("op", OPS.values(), ids=OPS.keys())
-def test_input_is_not_modified(op: Op):
-    x, y = _rand(0, requires_grad=True), _rand(1, requires_grad=True)
-    before = [t.detach().clone() for t in _components(x)]
-    op(x, y)
-    assert all(torch.equal(t, b) for t, b in zip(_components(x), before))
-    assert x.is_orthog is False
-
-
 @pytest.mark.parametrize("name", ["contract", "norm", "mode_mul", "add", "orthog", "get"])
 def test_gradcheck(name: str):
+    """A3: gradients of operations without SVD/eigendecomposition are correct."""
     x, y = _rand(0), _rand(1)
     leaves, nodes = x.dtree.get_leaves(), x.dtree.get_inner_nodes()
 
@@ -125,27 +100,18 @@ def test_gradcheck(name: str):
 # ~~~~~~~~~~~~~~~~~~~~~~~~~ requires_grad / requires_grad_ / detach ~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
-def test_factories_default_to_no_grad():
-    assert not hiepy.ones(SHAPE).requires_grad
-    assert not hiepy.randn(SHAPE, rank=2).requires_grad
+@pytest.mark.parametrize("name", FACTORIES)
+def test_factories_default_to_no_grad(name: str):
+    """A4: factories return tensors without gradient tracking by default."""
+    assert not FACTORIES[name](SHAPE).requires_grad
 
 
-@pytest.mark.parametrize(
-    "factory",
-    [
-        lambda: hiepy.zeros(SHAPE, requires_grad=True),
-        lambda: hiepy.ones(SHAPE, requires_grad=True),
-        lambda: hiepy.constant(SHAPE, 2.0, requires_grad=True),
-        lambda: hiepy.arange(SHAPE, requires_grad=True),
-        lambda: hiepy.randn(SHAPE, rank=2, requires_grad=True),
-        lambda: hiepy.hilbert(SHAPE, requires_grad=True),
-    ],
-    ids=["zeros", "ones", "constant", "arange", "randn", "hilbert"],
-)
-def test_factories_create_grad_leaves(factory: Callable[[], HTTensor]):
-    x = factory()
+@pytest.mark.parametrize("name", FACTORIES)
+def test_factories_create_grad_leaves(name: str):
+    """A4: with ``requires_grad=True``, factories return autograd leaves."""
+    x = FACTORIES[name](SHAPE, requires_grad=True)
     assert x.requires_grad
-    assert all(t.requires_grad and t.is_leaf for t in _components(x))
+    assert all(t.requires_grad and t.is_leaf for t in components(x))
 
 
 def test_requires_grad_toggles_in_place():

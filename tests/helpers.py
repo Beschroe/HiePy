@@ -1,14 +1,23 @@
-"""Shared helpers for the test suite (plain functions; fixtures live in ``conftest.py``)."""
+"""Shared helpers for the test suite (plain functions; fixtures live in ``conftest.py``).
+
+The tolerance constants and assertions implement the conventions of ``tests/INVARIANTS.md``.
+"""
 
 from __future__ import annotations
+
+from dataclasses import dataclass
 
 import pytest
 import torch
 
 import hiepy
-from hiepy import HTTensor
+from hiepy import DimTree, HTTensor
 
 cuda = pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is not available")
+
+# Tolerances (INVARIANTS.md, "Conventions"). Relax centrally if they cause false failures.
+RTOL_EXACT = 1e-14
+TOL_ORTHOG = 1e-14
 
 
 def make_dense_htt(shape: tuple[int, ...], seed: int = 0) -> tuple[torch.Tensor, HTTensor]:
@@ -18,8 +27,13 @@ def make_dense_htt(shape: tuple[int, ...], seed: int = 0) -> tuple[torch.Tensor,
     return dense, hiepy.to_htt(dense, {"atol": 1e-13})
 
 
+def components(x: HTTensor) -> list[torch.Tensor]:
+    """Return all leaf matrices and transfer tensors of ``x``."""
+    return [*x.U.values(), *x.B.values()]
+
+
 def assert_valid_structure(x: HTTensor) -> None:
-    """Check that the HT components are consistent with the dimension tree."""
+    """S1, S2, D1: components match the dimension tree, ranks are consistent, one dtype and device."""
     leaves = x.dtree.get_leaves()
     assert sorted(leaves) == [(i,) for i in range(x.order)]
     assert set(x.U) == set(leaves)
@@ -28,5 +42,66 @@ def assert_valid_structure(x: HTTensor) -> None:
         left, right = x.dtree.get_children(t)
         r_left = x.U[left].shape[1] if x.dtree.is_leaf(left) else x.B[left].shape[2]
         r_right = x.U[right].shape[1] if x.dtree.is_leaf(right) else x.B[right].shape[2]
+        assert x.B[t].ndim == 3
         assert x.B[t].shape[:2] == (r_left, r_right)
     assert x.B[x.dtree.get_root()].shape[2] == 1
+    assert len({(c.dtype, c.device) for c in components(x)}) == 1
+
+
+def assert_orthogonal(x: HTTensor) -> None:
+    """O1: the frame of every non-root node is orthonormal, checked per component."""
+    for t in x.dtree.get_nodes():
+        if x.dtree.is_root(t):
+            continue
+        F = x.U[t] if x.dtree.is_leaf(t) else x.B[t].reshape(-1, x.B[t].shape[2])
+        eye = torch.eye(F.shape[1], dtype=F.dtype, device=F.device)
+        deviation = torch.linalg.norm(F.T @ F - eye).item()
+        assert deviation <= TOL_ORTHOG, f"frame of node {t} deviates from orthonormality by {deviation:.2e}"
+
+
+def rtol_exact(dtype: torch.dtype) -> float:
+    """``RTOL_EXACT`` for float64; for other dtypes the same multiple of the machine epsilon."""
+    return RTOL_EXACT * torch.finfo(dtype).eps / torch.finfo(torch.float64).eps
+
+
+def assert_close(
+    actual: torch.Tensor, expected: torch.Tensor, scale: float | None = None, dtype: torch.dtype = torch.float64
+) -> None:
+    """Check ``‖actual − expected‖ ≤ rtol_exact(dtype) · scale``, where ``scale`` defaults to ``‖expected‖``."""
+    assert actual.shape == expected.shape
+    if scale is None:
+        scale = torch.linalg.norm(expected).item()
+    rtol = rtol_exact(dtype)
+    error = torch.linalg.norm(actual - expected).item()
+    assert error <= rtol * scale, f"error {error:.2e} exceeds {rtol:.0e} · {scale:.2e}"
+
+
+@dataclass(frozen=True)
+class Snapshot:
+    """Deep copy of the state of an HT tensor, used to check that inputs are not modified (V1)."""
+
+    U: dict[hiepy.Node, torch.Tensor]
+    B: dict[hiepy.Node, torch.Tensor]
+    dtree: DimTree
+    is_orthog: bool
+
+
+def snapshot(x: HTTensor) -> Snapshot:
+    """Return a detached deep copy of components, tree and flag of ``x``."""
+    U = {t: u.detach().clone() for t, u in x.U.items()}
+    B = {t: b.detach().clone() for t, b in x.B.items()}
+    return Snapshot(U=U, B=B, dtree=x.dtree.copy(), is_orthog=x.is_orthog)
+
+
+def assert_unchanged(x: HTTensor, before: Snapshot) -> None:
+    """V1: components, tree and flag of ``x`` equal the snapshot taken before an operation."""
+    assert x.dtree == before.dtree
+    assert x.is_orthog == before.is_orthog
+    assert set(x.U) == set(before.U) and set(x.B) == set(before.B)
+    assert all(torch.equal(x.U[t], before.U[t]) for t in before.U)
+    assert all(torch.equal(x.B[t], before.B[t]) for t in before.B)
+
+
+def storages(x: HTTensor) -> set[int]:
+    """Return the storage addresses of all components of ``x`` (V2)."""
+    return {c.untyped_storage().data_ptr() for c in components(x)}

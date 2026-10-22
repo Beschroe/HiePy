@@ -7,6 +7,9 @@ The reference semantics are those of dense torch indexing restricted to ints and
 - negative indices and slice bounds count from the end,
 - the result is an HTTensor if at least two modes remain, a 1-D torch.Tensor if one mode
   remains, and a 0-d torch.Tensor if no mode remains.
+
+Invariants covered (``tests/INVARIANTS.md``): N1 (agreement with dense indexing), S3 (order < 2 is dense), S1/S2
+(structure after restructuring), E6 (errors), V1/V2 (value semantics), O2 (flag).
 """
 
 from __future__ import annotations
