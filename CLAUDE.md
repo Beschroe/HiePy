@@ -179,8 +179,8 @@ docstrings referenced in the functionality map below.
 - Docstrings: NumPy style with LaTeX math (`$...$`, `$$...$$`) rendered by MkDocs/arithmatex,
   zero-based mode indices in formulas. Every public function documents preserved properties
   (tree, ranks, orthogonality) and arithmetic cost in its *Notes* section — keep that pattern.
-- Docstring examples run as doctests via `pytest --doctest-modules src/hiepy` (not part of a plain
-  `pytest tests/`). Every example starts, right after its imports, with
+- Docstring examples run as doctests in every plain `pytest` run (`testpaths` includes `src/hiepy`,
+  `addopts` includes `--doctest-modules`). Every example starts, right after its imports, with
   `>>> torch.set_default_dtype(torch.float64)`, so users can reproduce the printed results; expected
   outputs are therefore float64 (no `dtype=` suffix). Keep this line in new examples. The root
   `conftest.py` only restores the previous default dtype after each doctest. Printed results (errors,
@@ -289,14 +289,13 @@ Useful when debugging or changing a core routine, because changes propagate:
 - Expected behaviour of indexing: `tests/test_get_item.py`.
 - Rendered API docs: `mkdocs serve` (needs the `docs` extra), navigation in `mkdocs.yml`.
 - Package metadata, extras and lint config: `pyproject.toml`.
-- Real usage: `src/hiepy_apps/solvers/` and `src/hiepy_apps/sampling/`.
 
 ## Commands
 
 ```bash
 pip install -e ".[dev,docs]"   # a local .venv exists in the repo root
-pytest tests/
-pytest --doctest-modules src/hiepy   # docstring examples
+pytest                               # tests/ and docstring examples in src/hiepy
+pytest tests/                        # tests only
 ruff check src/hiepy tests
 mkdocs serve
 ```

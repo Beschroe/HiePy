@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "hiepy"
 version = "0.1.0"
-description = "A comprehensive PyTorch framework for Hierarchical Tucker (HT) tensors."
+description = "A comprehensive PyTorch framework for Hierarchical Tucker tensors."
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "EUPL 1.2" }
@@ -21,7 +21,7 @@ classifiers = [
 
 # Core dependencies required to run your library
 dependencies = [
-    "torch>=2.0.0",
+    "torch>=2.6",
 ]
 
 [project.optional-dependencies]
@@ -32,6 +32,7 @@ dev = [
     "hypothesis>=6.0.0",
     "ruff>=0.1.0",
     "mypy>=1.0.0",
+    "numpy",  # silences torch's "Failed to initialize NumPy" warning
 ]
 # Dependencies needed to build your documentation
 docs = [
@@ -45,7 +46,7 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["hiepy*", "hiepy_apps*"]
+include = ["hiepy*"]
 
 [tool.ruff]
 # Target Python version and line-length
@@ -69,12 +70,13 @@ warn_unused_configs = true
 disallow_untyped_defs = true  # Forces you to write type hints for functions
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests", "src/hiepy"]
 pythonpath = ["."]
-addopts = "-ra --strict-markers --strict-config"
+addopts = "-ra --strict-markers --strict-config --doctest-modules"
 markers = [
     "slow: long-running tests (deselect with -m 'not slow')",
 ]
+filterwarnings = ["error"]
 
 [tool.coverage.run]
 source = ["hiepy"]

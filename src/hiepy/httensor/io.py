@@ -65,6 +65,8 @@ def load(path: str | Path, map_location: torch.device | str | None = None) -> HT
     ------
     ValueError
         If `path` does not end with `.htt`.
+    TypeError
+        If the file does not contain an `HTTensor`.
 
     Notes
     -----
@@ -74,4 +76,8 @@ def load(path: str | Path, map_location: torch.device | str | None = None) -> HT
         path = str(path.resolve())
     if not path.endswith(".htt"):
         raise ValueError(f"Argument `path` must end with '.htt', got {path}.")
-    return torch.load(path, map_location=map_location, weights_only=False)
+
+    x = torch.load(path, map_location=map_location, weights_only=False)
+    if not isinstance(x, HTTensor):
+        raise TypeError(f"File {path} does not contain an HTTensor, got {type(x).__name__}.")
+    return x

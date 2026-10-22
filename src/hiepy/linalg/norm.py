@@ -37,4 +37,4 @@ def norm(x: HTTensor) -> torch.Tensor:
     if not x.is_orthog:
         x = orthog(x)
     B_root = x.B[x.dtree.get_root()]
-    return torch.linalg.norm(B_root)
+    return torch.Tensor(torch.linalg.norm(B_root))
