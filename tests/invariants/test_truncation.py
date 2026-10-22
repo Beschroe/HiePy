@@ -17,7 +17,7 @@ from hypothesis import strategies as st
 
 import hiepy
 from hiepy import HTTensor
-from tests.helpers import RTOL_EXACT
+from tests.helpers import RTOL_EXACT, RTOL_GRAM
 from tests.ops import ht_magnitude
 from tests.strategies import decaying_dense, ht_pairs, ht_tensors
 
@@ -30,6 +30,10 @@ TRUNCATIONS: dict[str, tuple[Truncation, list[float]]] = {
     "truncate_svd": (hiepy.truncate_svd, TOLS),
     "truncate_gram": (hiepy.truncate_gram, GRAM_TOLS),
 }
+
+# Rounding margin of N5, relative to m(x): the discarded singular values of truncate_gram are square roots of
+# Gramian eigenvalues and therefore only accurate to sqrt(eps)·‖x‖ (Q5).
+N5_MARGIN = {"truncate_svd": RTOL_EXACT, "truncate_gram": RTOL_GRAM}
 
 
 @st.composite
@@ -99,7 +103,8 @@ def test_ele_mul_meets_tolerance(pair: tuple[HTTensor, HTTensor], tol: float):
 @pytest.mark.parametrize("name", TRUNCATIONS)
 @given(x=_inputs(), data=st.data())
 def test_error_bounded_by_discarded_singular_values(name: str, x: HTTensor, data: st.DataObject):
-    """N5: the error is bounded by the discarded singular values, also when ``max_rank`` cuts."""
+    """N5: the error is bounded by the discarded singular values (plus ``N5_MARGIN``), also when ``max_rank``
+    cuts."""
     truncate, tols = TRUNCATIONS[name]
     X = x.full()
     if data.draw(st.booleans(), label="max_rank instead of tolerance"):
@@ -108,7 +113,7 @@ def test_error_bounded_by_discarded_singular_values(name: str, x: HTTensor, data
         opts, _ = _opts("rtol", data.draw(st.sampled_from(tols), label="tol"), 0.0)
     result, discarded = truncate(x, opts)
     bound = math.sqrt(sum((s**2).sum().item() for s in discarded.values()))
-    assert _error(X, result) <= bound + RTOL_EXACT * ht_magnitude(x)
+    assert _error(X, result) <= bound + N5_MARGIN[name] * ht_magnitude(x)
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~ N6: rank cap ~~~~~~~~~~~~~~~~~~~~~~~~~
