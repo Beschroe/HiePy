@@ -52,12 +52,12 @@ A wrong `True` silently breaks `norm` and `gramians`; a wrong `False` only costs
 | N1 | `result.full()` equals the dense counterpart of the operation applied to `x.full()`. | `add`, `sub`, `scalar_mul`, `mode_mul`, `ele_mode_mul`, `ele_mul` without `opts`, `orthog`, `squeeze`, `get`, `copy`, `clone`, `detach`, `to` (in the target precision); `zeros`, `ones`, `constant`, `arange` |
 | N2 | `contract(x, y)` equals `(x.full() * y.full()).sum()`; `norm(x)` equals `torch.linalg.norm(x.full())`. | `contract`, `norm` |
 | N3 | Round trips are exact: `to_htt(T, {"atol": 0}).full() ≈ T`; `load(save(x))` reproduces components, `dtree` and `is_orthog`; `dematricize ∘ matricize` and `devectorize ∘ vectorize` are the identity. | `to_htt`, `save`/`load`, `matricize`, `vectorize` |
-| N4 | **Error vs. tolerance**: `‖x.full() − result.full()‖ ≤ atol + rtol · ‖x‖` (a missing key counts as 0), without margin, if no `max_rank` is given. Tested down to `atol = 1e-12·‖x‖` and `rtol = 1e-12`; `truncate_gram` and `ele_mul` only down to `1e-8` (Q4). | `to_htt`, `truncate_svd`, `truncate_gram`, `ele_mul` (`atol` only, E8, Q6) |
-| N5 | **Error vs. discarded singular values**: `‖x.full() − result.full()‖ ≤ sqrt(Σ_t ‖σ_t‖²) + 1e-14 · ‖x‖`, where `σ_t` are the returned discarded singular values (Q5). Also with `max_rank`; same tolerance range as N4. | `truncate_svd`, `truncate_gram` |
+| N4 | **Error vs. tolerance**: `‖x.full() − result.full()‖ ≤ atol + rtol · ‖x‖ + RTOL_EXACT · m(x)` (a missing key counts as 0) if no `max_rank` is given; the last term only absorbs rounding (Q5). Tested down to `atol = 1e-12·‖x‖` and `rtol = 1e-12`; `truncate_gram` and `ele_mul` only down to `1e-8` (Q4). | `to_htt`, `truncate_svd`, `truncate_gram`, `ele_mul` (`atol` only, E8, Q6) |
+| N5 | **Error vs. discarded singular values**: `‖x.full() − result.full()‖ ≤ sqrt(Σ_t ‖σ_t‖²) + RTOL_EXACT · m(x)`, where `σ_t` are the returned discarded singular values (Q5). Also with `max_rank`; same tolerance range as N4. | `truncate_svd`, `truncate_gram` |
 | N6 | `rank[t] ≤ max_rank` for every non-root node. | `to_htt`, `truncate_svd`, `truncate_gram`, `ele_mul` |
 | N7 | `orthog` does not increase any rank. | `orthog` |
-| N8 | `randn` has ranks ≤ `rank`; `hilbert` approximates `1 / (i_0 + … + i_{d−1} + d)`, with an error that decreases as `M` grows. | `randn`, `hilbert` |
-| N9 | `local_left_svd(x)[t]` returns orthonormal vectors and the singular values of the matricization of `x.full()` at `t`; the eigenvalues of `gramians(x)[t]` are their squares. | `local_left_svd`, `gramians` |
+| N8 | `randn` has ranks ≤ `rank`; `hilbert` approximates `1 / (i_0 + … + i_{d−1} + d)`, with a smaller error for `M = 10` than for `M = 3`. | `randn`, `hilbert` |
+| N9 | `local_left_svd(x)[t] = (Û_t, S_t)`: `Û_t` is orthonormal, `S_t` are the singular values of the matricization `X_t` of `x.full()`, and with the frame `U_t` of `orthog(x)` the projection onto `U_t Û_t` preserves `X_t`. The eigenvalues of `gramians(orthog(x))[t]` are the squares of `S_t`. Compared up to sign and basis of the vectors. | `local_left_svd`, `gramians` |
 
 ## V – Value semantics
 
@@ -115,8 +115,10 @@ Rules from CLAUDE.md ("Autograd"), covered by `tests/test_autograd.py`.
   `X_t X_tᵀ`, so singular values below about `sqrt(ε)·‖x‖ ≈ 1e-8·‖x‖` cannot be resolved (stated in its
   docstring). Hence `truncate_gram` and `ele_mul`, which also selects ranks from Gramians, are tested only down to
   `1e-8`.
-- **Q5 – Buffer in N5.** `1e-14 · ‖x‖` absorbs rounding: without it, N5 failed where nothing was truncated and both
-  sides were at rounding level (`1e-15` vs. `2e-16`). The test constants (Conventions) are fixed and relaxed
+- **Q5 – Rounding margin in N4 and N5.** `RTOL_EXACT · m(x)` absorbs rounding: without it, N5 failed where nothing
+  was truncated and both sides were at rounding level (`1e-15` vs. `2e-16`). It is measured in `m(x)` rather than
+  `‖x‖` because representations with cancellation produce rounding errors of order `m(x)` (Q7); for orthonormal
+  components `m(x) = ‖x‖`, so the margin is `1e-14 · ‖x‖`. The test constants (Conventions) are fixed and relaxed
   centrally if they cause false failures.
 - **Q6 – `ele_mul` truncates conservatively (N4).** Its tolerance is enforced through an error bound for the
   Kronecker product, which is far from tight for the Hadamard product (measured errors ≈ 3 % of `atol`, ranks may
