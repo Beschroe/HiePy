@@ -37,9 +37,10 @@ A wrong `True` silently breaks `norm` and `gramians`; a wrong `False` only costs
 | Flag of result | Operations |
 |---|---|
 | `True` | `randn`, `to_htt`, `orthog`, `ones`/`constant` with `orthog=True` |
-| `False` | `zeros`, `arange`, `hilbert`, `ones`/`constant` (default), `add`, `sub`, `mode_mul`, `ele_mode_mul`, `ele_mul`, `truncate_svd`, `truncate_gram`, `squeeze` |
+| `False` | `zeros`, `arange`, `hilbert`, `ones`/`constant` (default), `add`, `sub`, `mode_mul`, `ele_mode_mul`, `ele_mul`, `truncate_svd`, `truncate_gram` |
 | as input | `scalar_mul`, `copy`, `clone`, `detach`, `to`, `requires_grad_`, `load` |
 | as input if the key selects every entry, else `False` | `get` |
+| as input if no mode is removed, else `False` | `squeeze` |
 
 ## N – Numerical correctness
 
@@ -100,8 +101,9 @@ Rules from CLAUDE.md ("Autograd"), covered by `tests/test_autograd.py`.
 ## Decisions
 
 - **Q1 – Simple orthogonality rule (O2).** An operation sets `True` only if it orthogonalizes by construction.
-  Results that happen to be orthogonal (e.g. `squeeze` of an orthogonal tensor) still get `False`; a flag that
-  depends on the input case would not be predictable for users.
+  Results that happen to be orthogonal (e.g. the projections in `truncate_*`) still get `False`; a flag that
+  depends on the numerical case would not be predictable for users. `get` and `squeeze` keep the flag only when
+  they return an unchanged copy (every entry selected, no mode removed), which the user can tell from the call.
 - **Q2 – `ele_mul` and `rtol` (E8).** Stays a warning, not an error.
 - **Q3 – Meaning of `rtol` (N4).** The global contract is `‖x − x̃‖ ≤ atol + rtol · ‖x‖`. `trunc_rank` compares per
   node with the norm of the node's singular values, which equals `‖x‖` for an orthogonalized tensor.

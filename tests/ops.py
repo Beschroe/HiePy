@@ -77,14 +77,27 @@ def _mode_mul_dense(X: torch.Tensor, A: torch.Tensor, dim: int) -> torch.Tensor:
     return torch.movedim(torch.tensordot(A, X, dims=([1], [dim])), 0, dim)
 
 
+def _squeezed_dims(shape: tuple[int, ...]) -> list[int]:
+    """Modes removed by ``squeeze``: all singletons, except the highest ones needed to keep order >= 2.
+
+    If all modes are singletons, all are removed and the result is a dense 0-d tensor.
+    """
+    dims = [i for i, n in enumerate(shape) if n == 1]
+    if len(dims) < len(shape):
+        while len(shape) - len(dims) < 2:
+            dims.remove(max(dims))
+    return dims
+
+
 def _squeeze_dense(X: torch.Tensor) -> torch.Tensor:
-    """Dense counterpart of ``squeeze``: remove singleton modes, but keep order >= 2 unless all modes are singletons."""
-    dims = [i for i, n in enumerate(X.shape) if n == 1]
-    if len(dims) == X.ndim:
-        return X.squeeze()
-    while X.ndim - len(dims) < 2:
-        dims.remove(max(dims))
+    """Dense counterpart of ``squeeze``."""
+    dims = _squeezed_dims(tuple(X.shape))
     return X.squeeze(tuple(dims)) if dims else X
+
+
+def _squeeze_flag(x: HTTensor) -> bool:
+    """``squeeze`` keeps the flag if it removes no mode (it returns a copy), else sets ``False``."""
+    return x.is_orthog and not _squeezed_dims(x.shape)
 
 
 def _flag_as_input(x: HTTensor) -> bool:
@@ -130,7 +143,7 @@ OPS: dict[str, Op] = {
     # get with an int removes the mode; order-2 inputs give a dense vector
     "get_int": Op(lambda x, y: x[0], lambda X, Y: X[0], _flag_false, keeps_tree=False),
     "get_entry": Op(lambda x, y: x[(0,) * x.order], lambda X, Y: X[(0,) * X.ndim], None, keeps_tree=False),
-    "squeeze": Op(lambda x, y: hiepy.squeeze(x), lambda X, Y: _squeeze_dense(X), _flag_false, keeps_tree=False),
+    "squeeze": Op(lambda x, y: hiepy.squeeze(x), lambda X, Y: _squeeze_dense(X), _squeeze_flag, keeps_tree=False),
     "copy": Op(lambda x, y: x.copy(), lambda X, Y: X, _flag_as_input),
     "clone": Op(lambda x, y: x.clone(), lambda X, Y: X, _flag_as_input),
     "detach": Op(lambda x, y: x.detach(), lambda X, Y: X, _flag_as_input, shares_storage=True),
