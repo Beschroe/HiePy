@@ -18,14 +18,15 @@ def squeeze(x: HTTensor, dims: Iterable[SupportsInt] | SupportsInt | None = None
 
     Case 1) `dims == None`: Removes all singleton dimensions.
 
-    Case 2) `dims != None`: Removes only the singleton dimensions specified in ``dims``.
+    Case 2) `dims != None`: Removes only the singleton dimensions specified in ``dims``. As in ``torch.squeeze``,
+    negative dimensions count from the end.
 
     Parameters
     ----------
     x : HTTensor
         Input HT tensor.
     dims : Iterable[SupportsInt] | SupportsInt | None, optional
-        Dimensions to remove. If None, all singleton dimensions are removed.
+        Dimensions to remove, each in ``[-x.order, x.order)``. If None, all singleton dimensions are removed.
 
     Returns
     -------
@@ -58,6 +59,8 @@ def squeeze(x: HTTensor, dims: Iterable[SupportsInt] | SupportsInt | None = None
     >>> x_squeezed = hiepy.squeeze(x)
     >>> x_squeezed.shape
     (8, 8)
+    >>> hiepy.squeeze(x, dims=-2).shape
+    (1, 8, 8)
     """
     order = x.order
     shape = x.shape
@@ -65,16 +68,20 @@ def squeeze(x: HTTensor, dims: Iterable[SupportsInt] | SupportsInt | None = None
     # Argument parsing and validation
     if dims is None:
         dims_set = {i for i, s in enumerate(shape) if s == 1}
-    elif isinstance(dims, SupportsInt):
-        dims_set = {int(dims)}
-    elif isinstance(dims, Iterable):
-        dims_set = {int(d) for d in dims}
     else:
-        raise TypeError(f"dims must be an int-like or an Iterable of int-likes, got {type(dims)}.")
+        if isinstance(dims, SupportsInt):
+            requested = {int(dims)}
+        elif isinstance(dims, Iterable):
+            requested = {int(d) for d in dims}
+        else:
+            raise TypeError(f"dims must be an int-like or an Iterable of int-likes, got {type(dims)}.")
 
-    out_of_bounds = {d for d in dims_set if d < 0 or d >= order}
-    if out_of_bounds:
-        raise ValueError(f"Dimensions {out_of_bounds} are out of bounds for order {order}.")
+        out_of_bounds = {d for d in requested if d < -order or d >= order}
+        if out_of_bounds:
+            raise ValueError(f"Dimensions {out_of_bounds} are out of bounds for order {order}.")
+
+        # Negative dimensions count from the end, as in torch
+        dims_set = {d % order for d in requested}
 
     non_singletons = {d for d in dims_set if shape[d] != 1}
     if non_singletons:

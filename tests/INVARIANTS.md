@@ -89,7 +89,7 @@ Rules from CLAUDE.md ("Autograd"), covered by `tests/test_autograd.py`.
 | ID | Invariant |
 |---|---|
 | E1 | `add`, `sub`, `contract`, `ele_mul` raise `ValueError` for different trees or shapes. |
-| E2 | `mode_mul`, `ele_mode_mul`, `squeeze` raise `ValueError` for modes out of range and for operands of wrong order or size. |
+| E2 | `mode_mul`, `ele_mode_mul`, `squeeze` raise `ValueError` for modes out of range and for operands of wrong order or size. `squeeze` accepts modes in `[-d, d)`, negative ones counting from the end as in torch. |
 | E3 | `gramians` raises `ValueError` if `is_orthog` is `False`. |
 | E4 | `HTTensor(...)` raises `TypeError` for mixed dtypes and `RuntimeError` for mixed devices. |
 | E5 | `save`/`load` raise `ValueError` for paths without `.htt`; `load` raises `TypeError` if the file holds no `HTTensor`. |
