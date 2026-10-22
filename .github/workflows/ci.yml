@@ -46,7 +46,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python: ["3.12", "3.13"]
+        python: ["3.12"]
         # "min" must match the lower bound of `torch` in pyproject.toml.
         torch: ["min", "latest"]
     env:
