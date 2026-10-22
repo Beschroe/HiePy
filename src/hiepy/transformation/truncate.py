@@ -132,7 +132,10 @@ def truncate_gram(x: HTTensor, opts: TruncOpts) -> tuple[HTTensor, dict[Node, to
       for (nearly) equal singular values. The selected ranks are discrete and therefore not differentiated.
     - The truncation comes at an arithmetic cost of $\mathcal{O}(dnr^2 + dr^4)$, where $d$ is the number of dimensions,
     $r$ the maximum hierarchical rank, and $n$ the maximum mode size.
-    - Typically less accurate than ``truncate_svd``.
+    - Typically less accurate than ``truncate_svd``: the eigenvalues of the Gram matrices are the squared singular
+      values and are only accurate up to machine precision times the largest one. Singular values below about
+      $\sqrt{\varepsilon}\,\lVert x \rVert$ ($\approx 10^{-8} \lVert x \rVert$ in float64) therefore cannot be
+      resolved.
     """
     # Adjust error tolerances in opts.
     # To guarantee a global error bound e, the local truncation error per node
