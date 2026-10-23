@@ -69,7 +69,7 @@ def arange(
              [6., 7.]]])
     """
     dtype = torch.get_default_dtype() if dtype is None else dtype
-
+    a = 1
     # Init dtree
     d = len(shape)
     dtree = DimTree.from_order(d)
