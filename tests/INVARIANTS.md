@@ -18,11 +18,10 @@ in [Decisions](#decisions).
     accuracy class of the computed quantity: `SAFETY · ε` for direct computations (`SAFETY = 45`, i.e. about
     `1e-14` in float64), `sqrt(ε)` for singular values computed from Gramian eigenvalues (`truncate_gram`), whose
     eigenvalues are only accurate to `ε·‖x‖²` (Q5).
-  - `scale`: the size of the quantities entering the computation. For exact results the larger of `‖reference‖`
-    and the size of the inputs, e.g. `m(x) + m(y)` for `x − y`, `m(x)·m(y)` for `contract` (Q7); for approximations
-    `m(x)`; for orthonormality `‖FᵀF − I‖_F` the number of columns `k`.
-  - `m(x)`, the size of an HT tensor: the product of the spectral norms of its components (transfer tensors
-    matricized as `(r_l r_r) × r_t`). It bounds `‖x‖` and equals it for orthonormal components.
+  - `scale`: the norm of **the same computation carried out with absolute values** of all components and
+    arguments (`|x|` denotes the tensor reconstructed from `|U[t]|`, `|B[t]|`; subtraction becomes addition), e.g.
+    `‖|x| + |y|‖` for `x − y`, `⟨|x|, |y|⟩` for `contract`, `‖|x|[key]‖` for `get`, `‖|x|‖` for `orthog` and for the
+    truncations; for orthonormality `‖FᵀF − I‖_F` the number of columns `k` (Q7, Q12).
 
   The only tuning knob is `SAFETY`; a failing check reports `bound`, `rel` and `scale` separately.
 
@@ -60,8 +59,8 @@ A wrong `True` silently breaks `norm` and `gramians`; a wrong `False` only costs
 | N1 | `result.full()` equals the dense counterpart of the operation applied to `x.full()`. | `add`, `sub`, `scalar_mul`, `mode_mul`, `ele_mode_mul`, `ele_mul` without `opts`, `orthog`, `squeeze`, `get`, `copy`, `clone`, `detach`, `to` (in the target precision); `zeros`, `ones`, `constant`, `arange` |
 | N2 | `contract(x, y)` equals `(x.full() * y.full()).sum()`; `norm(x)` equals `torch.linalg.norm(x.full())`. | `contract`, `norm` |
 | N3 | Round trips are exact: `to_htt(T, {"atol": 0}).full() ≈ T`; `load(save(x))` reproduces components, `dtree` and `is_orthog`; `dematricize ∘ matricize` and `devectorize ∘ vectorize` are the identity. | `to_htt`, `save`/`load`, `matricize`, `vectorize` |
-| N4 | **Error vs. tolerance**: `‖x.full() − result.full()‖ ≤ atol + rtol · ‖x‖` (a missing key counts as 0) if no `max_rank` is given, up to rounding of order `m(x)` (Conventions, Q5). Tested down to `atol = 1e-12·‖x‖` and `rtol = 1e-12`; `truncate_gram` and `ele_mul` only down to their resolution `sqrt(ε)` (`1e-8` in float64, `3.5e-4` in float32; Q4). | `to_htt`, `truncate_svd`, `truncate_gram`, `ele_mul` (`atol` only, E8, Q6) |
-| N5 | **Error vs. discarded singular values**: `‖x.full() − result.full()‖ ≤ sqrt(Σ_t ‖σ_t‖²)`, where `σ_t` are the returned discarded singular values, up to rounding of order `m(x)` in the accuracy class of the `σ_t` (Gramian for `truncate_gram`, Q5). Also with `max_rank`; same tolerance range as N4. | `truncate_svd`, `truncate_gram` |
+| N4 | **Error vs. tolerance**: `‖x.full() − result.full()‖ ≤ atol + rtol · ‖x‖` (a missing key counts as 0) if no `max_rank` is given, up to rounding of order `‖|x|‖` (Conventions, Q5). Tested down to `atol = 1e-12·‖x‖` and `rtol = 1e-12`; `truncate_gram` and `ele_mul` only down to their resolution `sqrt(ε)` (`1e-8` in float64, `3.5e-4` in float32; Q4). | `to_htt`, `truncate_svd`, `truncate_gram`, `ele_mul` (`atol` only, E8, Q6) |
+| N5 | **Error vs. discarded singular values**: `‖x.full() − result.full()‖ ≤ sqrt(Σ_t ‖σ_t‖²)`, where `σ_t` are the returned discarded singular values, up to rounding of order `‖|x|‖` in the accuracy class of the `σ_t` (Gramian for `truncate_gram`, Q5). Also with `max_rank`; same tolerance range as N4. | `truncate_svd`, `truncate_gram` |
 | N6 | `rank[t] ≤ max_rank` for every non-root node. | `to_htt`, `truncate_svd`, `truncate_gram`, `ele_mul` |
 | N7 | `orthog` does not increase any rank. | `orthog` |
 | N8 | `randn` has ranks ≤ `rank`; `hilbert` approximates `1 / (i_0 + … + i_{d−1} + d)`, with a smaller error for `M = 10` than for `M = 3`. | `randn`, `hilbert` |
@@ -126,10 +125,10 @@ Rules from CLAUDE.md ("Autograd"), covered by `tests/test_autograd.py`.
   `X_t X_tᵀ`, so singular values below about `sqrt(ε)·‖x‖` (`1e-8·‖x‖` in float64, `3.5e-4·‖x‖` in float32) cannot
   be resolved (stated in its docstring). Hence `truncate_gram` and `ele_mul`, which also selects ranks from
   Gramians, are tested only down to this resolution of the precision of the data (`tests/tolerances.py::resolution`).
-- **Q5 – Rounding margin in N4 and N5.** A margin of `SAFETY·ε · m(x)` absorbs rounding: without it, N5 failed
-  where nothing was truncated and both sides were at rounding level (`1e-15` vs. `2e-16`). It is measured in `m(x)`
-  rather than `‖x‖` because representations with cancellation produce rounding errors of order `m(x)` (Q7); for
-  orthonormal components `m(x) = ‖x‖`. N5 for `truncate_gram` uses the Gramian accuracy class `sqrt(ε) · m(x)`: its
+- **Q5 – Rounding margin in N4 and N5.** A margin of `SAFETY·ε · ‖|x|‖` absorbs rounding: without it, N5 failed
+  where nothing was truncated and both sides were at rounding level (`1e-15` vs. `2e-16`). It is measured in `‖|x|‖`
+  rather than `‖x‖` because representations with cancellation produce rounding errors of that order (Q7, Q12).
+  N5 for `truncate_gram` uses the Gramian accuracy class `sqrt(ε) · ‖|x|‖`: its
   discarded singular values are `sqrt(λ)` of Gramian eigenvalues with absolute error `ε·‖x‖²`, i.e. accurate only to
   `ε·‖x‖²/σ`, at most `sqrt(ε)·‖x‖`. With the rounding class, N5 failed at `rtol = 1e-4` (excess `1.7e-13` in CI,
   `2.3e-14` locally, for discarded singular values of order `1e-6`).
@@ -139,8 +138,7 @@ Rules from CLAUDE.md ("Autograd"), covered by `tests/test_autograd.py`.
 - **Q7 – Scale of exact comparisons (N1, N2).** Rounding errors scale with the size of the components, not with
   `‖x‖`: in a representation with cancellation (e.g. a rank-deficient leaf whose columns the parent combines to a
   small vector) `‖x‖` can be orders of magnitude smaller than the components, and `norm` deviated by `1e-13 · ‖x‖`.
-  Measured against `m(x)`, all operations stay below `1e-14` (standard bound `|fl(AB) − AB| ≲ ε‖A‖‖B‖`); for
-  orthonormal components `m(x) = ‖x‖`, so the check is as strict as before.
+  The scale therefore has to account for the components, see Q12.
 - **Q8 – Arbitrary dimension trees.** Every binary tree over the modes is supported, including unbalanced trees,
   non-contiguous nodes such as `(0, 2) | (1, 3)` and left children with larger modes than their siblings.
   `full` used to assume mode-ordered rows and returned permuted entries for such trees; this went unnoticed because
@@ -164,3 +162,13 @@ Rules from CLAUDE.md ("Autograd"), covered by `tests/test_autograd.py`.
   (`left_svd_gramian`) and raise `ValueError` naming the range; before, they failed with `IndexError` or
   `LinAlgError`, or returned a result truncated against a `nan` tolerance. The range is documented in the
   docstrings; scaling the computations internally to support the full float64 range was not pursued.
+- **Q12 – One rule for the rounding scale.** The scale of rounding is the same computation with absolute values
+  (Conventions), the textbook componentwise bound `|fl(Σ aᵢbᵢ) − Σ aᵢbᵢ| ≤ γ·Σ|aᵢ||bᵢ|`. It replaces the product of
+  the spectral norms of the components and the per-operation formulas built on it, which were harder to explain and
+  measured the whole tensor instead of the terms involved: a deviation of the result went undetected below 68 ×
+  (relative) for single entries (`get_entry`), 32 × for `contract`, 1.1 × for `get` and 0.45 × for `ele_mul`.
+  Measured on the strategy inputs with the new rule: errors stay below 11 % of the bound (about 10 × room for other
+  platforms); the smallest detectable relative deviation is about `1e-14` (median) to `1e-10` (worst case) in
+  float64 and `1e-5` to `3e-2` in float32 for all exact operations except `contract`, where the result itself can
+  cancel to almost zero (up to `1e-8` in float64). `tests/test_tolerances.py` checks that a relative deviation of
+  `1e-9` (float64) or `1e-2` (float32) is always detected, so the model cannot be loosened unnoticed.

@@ -290,7 +290,9 @@ Not available: general `tensordot` between HT tensors (module commented out), Kr
   kinds (orthonormal, general, rank-deficient), zero tensors, scales, canonical/`squeeze`d/arbitrary trees,
   float32 and float64. A failing example prints a `build_ht(...)` call that rebuilds it.
 - `tests/tolerances.py` is the only place that sets numerical tolerances (error model
-  `error ≤ bound + rel · scale`, `SAFETY`, accuracy classes, `m(x)`); never use literal tolerances in tests.
+  `error ≤ bound + rel · scale`; `rel = SAFETY · ε` of the least precise dtype, `scale` = the same computation with
+  absolute values of all components and arguments); never use literal tolerances in tests. `tests/test_tolerances.py`
+  checks that the model still detects real deviations.
 - Profiles: `dev` (50 examples, default) and `ci` (200, derandomized; `HYPOTHESIS_PROFILE=ci`). Warnings are
   errors (`filterwarnings = ["error"]`); expected warnings need `pytest.warns`.
 - Layout: `tests/invariants/` (S, O, V, N, E across all operations), `tests/httensor/`, `tests/linalg/`,
