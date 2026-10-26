@@ -5,14 +5,14 @@ This module provides functionality to remove singleton dimensions from HT tensor
 
 from __future__ import annotations
 
-from typing import Iterable, SupportsInt
+from typing import Iterable
 
 import torch
 
 from hiepy.httensor.httensor import HTTensor
 
 
-def squeeze(x: HTTensor, dims: Iterable[SupportsInt] | SupportsInt | None = None) -> HTTensor | torch.Tensor:
+def squeeze(x: HTTensor, dims: Iterable[int] | int | None = None) -> HTTensor | torch.Tensor:
     r"""
     Removes singleton dimensions from input hierarchical Tucker tensor.
 
@@ -25,8 +25,9 @@ def squeeze(x: HTTensor, dims: Iterable[SupportsInt] | SupportsInt | None = None
     ----------
     x : HTTensor
         Input HT tensor.
-    dims : Iterable[SupportsInt] | SupportsInt | None, optional
-        Dimensions to remove, each in ``[-x.order, x.order)``. If None, all singleton dimensions are removed.
+    dims : Iterable[int] | int | None, optional
+        Dimensions to remove, each an ``int`` in ``[-x.order, x.order)``. If None, all singleton dimensions are
+        removed.
 
     Returns
     -------
@@ -37,7 +38,7 @@ def squeeze(x: HTTensor, dims: Iterable[SupportsInt] | SupportsInt | None = None
     Raises
     ------
     TypeError
-        If ``dims`` is not an integer-like type or an iterable of integer-likes.
+        If ``dims`` is neither an ``int`` nor an iterable of ``int`` (``bool``, ``float`` etc. are rejected).
     ValueError
         If any of the specified dimensions are out of bounds or not singletons.
 
@@ -69,12 +70,12 @@ def squeeze(x: HTTensor, dims: Iterable[SupportsInt] | SupportsInt | None = None
     if dims is None:
         dims_set = {i for i, s in enumerate(shape) if s == 1}
     else:
-        if isinstance(dims, SupportsInt):
-            requested = {int(dims)}
-        elif isinstance(dims, Iterable):
-            requested = {int(d) for d in dims}
-        else:
-            raise TypeError(f"dims must be an int-like or an Iterable of int-likes, got {type(dims)}.")
+        entries: list[object] = (
+            list(dims) if isinstance(dims, Iterable) and not isinstance(dims, torch.Tensor) else [dims]
+        )
+        if any(isinstance(d, bool) or not isinstance(d, int) for d in entries):
+            raise TypeError(f"dims must be an int or an Iterable of ints, got {dims!r}.")
+        requested = {d for d in entries if isinstance(d, int)}
 
         out_of_bounds = {d for d in requested if d < -order or d >= order}
         if out_of_bounds:

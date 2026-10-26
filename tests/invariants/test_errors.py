@@ -73,10 +73,18 @@ def test_invalid_modes_and_operands_raise(name: str):
         MODE_ERRORS[name](_x())
 
 
-def test_squeeze_rejects_non_int_dims():
-    """E2: ``squeeze`` rejects ``dims`` that are neither int-like nor an iterable of int-likes."""
-    with pytest.raises(TypeError):
-        hiepy.squeeze(_x(), 1.5)  # type: ignore[arg-type]
+@pytest.mark.parametrize("dims", [1.5, 1.0, True, [1.0], (1, True), torch.tensor(1), "1"], ids=repr)
+def test_squeeze_rejects_non_int_dims(dims: object):
+    """E2: ``squeeze`` accepts only ``int`` dims (or an iterable of ``int``), as ``torch.squeeze``."""
+    x = hiepy.randn((3, 1, 2), rank=2, dtype=torch.float64)
+    with pytest.raises(TypeError, match="int"):
+        hiepy.squeeze(x, dims)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("dims", [1, -2, [1], (1, -2), range(1, 2)], ids=repr)
+def test_squeeze_accepts_int_dims(dims: object):
+    """E2: an ``int`` or any iterable of ``int`` is accepted."""
+    assert hiepy.squeeze(hiepy.randn((3, 1, 2), rank=2, dtype=torch.float64), dims).shape == (3, 2)  # type: ignore[arg-type, union-attr]
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~ E3: gramians ~~~~~~~~~~~~~~~~~~~~~~~~~
