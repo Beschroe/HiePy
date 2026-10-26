@@ -102,26 +102,9 @@ def squeeze(x: HTTensor, dims: Iterable[SupportsInt] | SupportsInt | None = None
 
     # Topological Contraction (bottom-up)
     # Iterate in descending order so indices do not shift
+    # Leaves keep their single-mode keys throughout: an absorbed leaf's father takes the key of its sibling.
     for dim in sorted(dims_set, reverse=True):
-        next_leaf = [node for node in x.dtree.get_leaves() if dim in node]
-        if not next_leaf:
-            continue
-        leaf = next_leaf[0]
-
-        if len(leaf) > 1:
-            # Multi-dimensional leaf: Remove a dimension without contraction
-            idx = leaf.index(dim)
-            new_leaf = tuple(d for d in leaf if d != dim)
-
-            # Update leaf matrix
-            x.U[new_leaf] = torch.squeeze(x.U[leaf], dim=idx)
-
-            # Update tree
-            x.dtree.map(old_to_new=lambda node: new_leaf if node == leaf else node)
-
-            # Free memory
-            del x.U[leaf]
-            continue
+        leaf = (dim,)
 
         # Single-dimensional leaf: Absord leaf into father
         father = x.dtree.get_parent(leaf)

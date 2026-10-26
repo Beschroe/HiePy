@@ -95,8 +95,8 @@ docstrings referenced in the functionality map below.
 
 ### DimTree and nodes
 
-- `Node` is a `tuple[int, ...]` of mode indices, e.g. `(0, 1)`; leaves are `(i,)`. Only `squeeze`
-  temporarily creates leaves with several modes (see the `DimTree` notes).
+- `Node` is a `tuple[int, ...]` of mode indices, e.g. `(0, 1)`; leaves are always `(i,)` (also inside `squeeze`,
+  where an absorbed leaf's father takes the key of its sibling).
 - All factories and `to_htt` use the canonical balanced tree `DimTree.from_order(d)`. After
   `squeeze` (and thus after integer indexing) the tree may be non-canonical.
 - Many operations address leaves directly as `U[(dim,)]` (`mode_mul`, `ele_mode_mul`, `get`,
