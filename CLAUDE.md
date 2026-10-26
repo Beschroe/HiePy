@@ -57,8 +57,12 @@ Related top-level locations:
 
 - `tests/` — pytest suite, organized around the invariant catalog (see "Tests" below).
 - `test.ipynb` (repo root) — exploratory notebook, not a test.
-- `docs/` + `mkdocs.yml` — MkDocs (material + mkdocstrings, NumPy docstring style). The pages in
-  `docs/api/*.md` list the documented members **explicitly** (`::: hiepy.<name>`). Every push to `main` publishes
+- `docs/` + `mkdocs.yml` — MkDocs (material + mkdocstrings, NumPy docstring style): Home (`index.md`),
+  `getting-started.md`, User Guide (`user-guide/`: HT format, operations, truncation, practical notes) and the API
+  reference. The pages in `docs/api/*.md` list the documented members **explicitly** (`::: hiepy.<name>`);
+  `docs/api/index.md` links every public name — add new operations there too. The `>>>` examples of all pages run as
+  doctests (same conventions as docstring examples; leave a blank line before the closing code fence). Every push to
+  `main` publishes
   the documentation to <https://beschroe.github.io/HiePy/> (`.github/workflows/docs.yml`, GitHub Pages via Actions);
   pull requests only check that it builds (`docs` job in `ci.yml`).
 
@@ -187,8 +191,9 @@ docstrings referenced in the functionality map below.
 - Docstrings: NumPy style with LaTeX math (`$...$`, `$$...$$`) rendered by MkDocs/arithmatex,
   zero-based mode indices in formulas. Every public function documents preserved properties
   (tree, ranks, orthogonality) and arithmetic cost in its *Notes* section — keep that pattern.
-- Docstring examples run as doctests in every plain `pytest` run (`testpaths` includes `src/hiepy`,
-  `addopts` includes `--doctest-modules`). Every example starts, right after its imports, with
+- Docstring examples run as doctests in every plain `pytest` run (`testpaths` includes `src/hiepy` and `docs`,
+  `addopts` includes `--doctest-modules` and `--doctest-glob=*.md`, so the examples of the documentation pages
+  run too). Every example starts, right after its imports, with
   `>>> torch.set_default_dtype(torch.float64)`, so users can reproduce the printed results; expected
   outputs are therefore float64 (no `dtype=` suffix). Keep this line in new examples. The root
   `conftest.py` only restores the previous default dtype after each doctest. Rounding-level results
@@ -330,7 +335,7 @@ Useful when debugging or changing a core routine, because changes propagate:
 
 ```bash
 pip install -e ".[dev,docs]"   # a local .venv exists in the repo root
-pytest                               # tests/ and docstring examples in src/hiepy (hypothesis profile "dev")
+pytest                               # tests/, docstring examples and docs/*.md examples (hypothesis profile "dev")
 pytest tests/                        # tests only
 HYPOTHESIS_PROFILE=ci pytest         # as in CI: 200 examples per test, derandomized
 pytest --cov --cov-report=html       # coverage (fails below 90 %), report in htmlcov/index.html
