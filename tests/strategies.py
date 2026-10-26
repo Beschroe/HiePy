@@ -1,8 +1,9 @@
 """hypothesis strategies for HT tensors.
 
 Tensors are built by ``build_ht`` from a specification drawn by hypothesis. The specification is reported with
-``note``, so a failing example can be rebuilt by calling ``build_ht`` with the printed arguments. All tensors are
-float64.
+``note``, so a failing example can be rebuilt by calling ``build_ht`` with the printed arguments. Tensors are
+float32 or float64; components are generated in float64 and converted at the end, so a seed gives the same tensor in
+both precisions.
 
 The specification varies, independently per node of the tree:
 
@@ -28,6 +29,11 @@ MAX_SIZE = 5
 MAX_RANK = 4
 KINDS = ("orthonormal", "random", "deficient")
 SCALES = (1e-3, 1.0, 1e3)
+
+
+def dtypes() -> st.SearchStrategy[torch.dtype]:
+    """float32 or float64."""
+    return st.sampled_from([torch.float64, torch.float32])
 
 
 @st.composite
@@ -57,6 +63,7 @@ def build_ht(
     scale: float,
     orthog: bool,
     children: dict[hiepy.Node, tuple[hiepy.Node, hiepy.Node]] | None = None,
+    dtype: torch.dtype = torch.float64,
 ) -> HTTensor:
     """Build an HT tensor from a specification.
 
@@ -79,6 +86,8 @@ def build_ht(
         Whether the result is orthogonal (orthogonalized if necessary). If ``False``, the flag is ``False``.
     children
         Child mapping of an arbitrary tree over ``len(shape) + len(inserted)`` modes; ``None`` for the canonical tree.
+    dtype
+        dtype of the result; ``squeeze`` and ``orthog`` run in this precision.
     """
     ext_shape = list(shape)
     for pos in sorted(inserted):
@@ -105,7 +114,7 @@ def build_ht(
             U[t] = M
         else:
             B[t] = M.reshape(ranks[left], ranks[right], ranks[t])
-    x = HTTensor(U=U, B=B, dtree=dtree, is_orthog=orthog and all_orthonormal)
+    x = HTTensor(U=U, B=B, dtree=dtree, is_orthog=orthog and all_orthonormal).to(dtype=dtype)
     if inserted:
         x = hiepy.squeeze(x, dims=sorted(inserted))
     if orthog and not x.is_orthog:
@@ -152,6 +161,7 @@ def ht_tensors(
     tree: TreeSpec | None = None,
     orthog: bool | None = None,
     max_order: int = MAX_ORDER,
+    dtype: torch.dtype | None = None,
 ) -> HTTensor:
     """Random float64 HT tensor, see the module docstring; orthogonal or not, as drawn unless fixed."""
     shape, inserted, children = tree if tree is not None else draw(tree_specs(max_order=max_order))
@@ -171,6 +181,7 @@ def ht_tensors(
         scale=draw(st.sampled_from(SCALES)),
         orthog=draw(st.booleans()) if orthog is None else orthog,
         children=children,
+        dtype=draw(dtypes()) if dtype is None else dtype,
     )
     note(f"build_ht(**{spec})")
     return build_ht(**spec)  # type: ignore[arg-type]
@@ -178,9 +189,13 @@ def ht_tensors(
 
 @st.composite
 def ht_pairs(draw: st.DrawFn, max_order: int = MAX_ORDER) -> tuple[HTTensor, HTTensor]:
-    """Two random HT tensors of the same shape and tree; ranks, kinds and flags are drawn independently."""
+    """Two random HT tensors of the same shape, tree and dtype; ranks, kinds and flags are drawn independently.
+
+    Mixed precisions are covered by ``tests/test_dtype_device.py`` (D2).
+    """
     tree = draw(tree_specs(max_order=max_order))
-    return draw(ht_tensors(tree=tree)), draw(ht_tensors(tree=tree))
+    dtype = draw(dtypes())
+    return draw(ht_tensors(tree=tree, dtype=dtype)), draw(ht_tensors(tree=tree, dtype=dtype))
 
 
 @st.composite
@@ -196,4 +211,4 @@ def decaying_dense(draw: st.DrawFn, max_order: int = MAX_ORDER, terms: int = 8) 
         for n in shape[1:]:
             term = torch.tensordot(term, torch.randn(n, generator=gen, dtype=torch.float64), dims=0)
         T += decay**k * term
-    return T
+    return T.to(draw(dtypes()))

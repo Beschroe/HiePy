@@ -35,8 +35,7 @@ class DimTree:
     Notes
     -----
     - The tree is always binary.
-    - Leaves correspond to singleton dimension tuples (i,). However, during certain procedures a leaf may temporarily
-      contain several modes.
+    - Leaves correspond to singleton dimension tuples (i,).
     - Inner nodes correspond to a group of dimensions.
     """
 

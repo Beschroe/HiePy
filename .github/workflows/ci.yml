@@ -75,6 +75,20 @@ jobs:
       - name: pytest (tests + doctests)
         # Slow tests run only against the latest torch.
         run: pytest --cov --cov-report=term --cov-report=xml ${{ matrix.torch == 'min' && '-m "not slow"' || '' }}
+      # Coverage on the run's summary page and as a downloadable HTML report (latest torch only).
+      - name: Coverage summary
+        if: always() && matrix.torch == 'latest'
+        run: |
+          echo "### Coverage" >> "$GITHUB_STEP_SUMMARY"
+          coverage report --format=markdown --fail-under=0 >> "$GITHUB_STEP_SUMMARY"
+          coverage html --fail-under=0
+      - name: Upload coverage report
+        if: always() && matrix.torch == 'latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-html
+          path: htmlcov/
+          retention-days: 14
 
   docs:
     runs-on: ubuntu-latest

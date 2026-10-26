@@ -55,9 +55,8 @@ src/hiepy/
 
 Related top-level locations:
 
-- `tests/` — pytest suite: `test_get_item.py` (indexing), `test_dtype_device.py` (dtype/device rules),
-  `test_autograd.py` (gradient tracking);
-  `test.ipynb` is an exploratory notebook, not a test.
+- `tests/` — pytest suite, organized around the invariant catalog (see "Tests" below).
+- `test.ipynb` (repo root) — exploratory notebook, not a test.
 - `docs/` + `mkdocs.yml` — MkDocs (material + mkdocstrings, NumPy docstring style). The pages in
   `docs/api/*.md` list the documented members **explicitly** (`::: hiepy.<name>`).
 
@@ -73,7 +72,8 @@ docstrings referenced in the functionality map below.
   function (to avoid circular imports). See the method blocks in `httensor/httensor.py`.
 - Adding a new public operation therefore means: (1) a module with the function,
   (2) export in `hiepy/__init__.py` (import + `__all__`), (3) optionally a wrapper method on
-  `HTTensor`, (4) an entry in the matching `docs/api/*.md` page, (5) tests in `tests/`.
+  `HTTensor`, (4) an entry in the matching `docs/api/*.md` page, (5) an entry in the registry `tests/ops.py`
+  (and, for a new kind of property, an invariant in `tests/INVARIANTS.md`).
 - Argument order: the tensor comes first, e.g. `mode_mul(x, A, dim)`, `mode_mul_torch(x, A, dim)`,
   `ele_mode_mul(x, v, dim)`, `multi_mode_mul_torch(x, matrices)`. Internal calls use keyword
   arguments (`x=..., A=...`); keep that style.
@@ -95,8 +95,8 @@ docstrings referenced in the functionality map below.
 
 ### DimTree and nodes
 
-- `Node` is a `tuple[int, ...]` of mode indices, e.g. `(0, 1)`; leaves are `(i,)`. Only `squeeze`
-  temporarily creates leaves with several modes (see the `DimTree` notes).
+- `Node` is a `tuple[int, ...]` of mode indices, e.g. `(0, 1)`; leaves are always `(i,)` (also inside `squeeze`,
+  where an absorbed leaf's father takes the key of its sibling).
 - All factories and `to_htt` use the canonical balanced tree `DimTree.from_order(d)`. After
   `squeeze` (and thus after integer indexing) the tree may be non-canonical.
 - Many operations address leaves directly as `U[(dim,)]` (`mode_mul`, `ele_mode_mul`, `get`,
@@ -120,7 +120,7 @@ docstrings referenced in the functionality map below.
 
 - Follows dense torch indexing restricted to ints and slices; the full specification (result
   types, errors, unsupported keys) is in the docstring of `httensor/get_item.py::get`, and
-  `tests/test_get_item.py` is the executable reference.
+  `tests/httensor/test_get_item.py` is the executable reference.
 - Results with fewer than two remaining modes are returned as dense `torch.Tensor`s, since HT
   tensors need order ≥ 2 (the same limit `squeeze` enforces).
 
@@ -138,8 +138,8 @@ docstrings referenced in the functionality map below.
   `trunc_rank` may be computed from detached values.
 - Gradients through `torch.linalg.svd`/`eigh` (`to_htt`, `truncate_*`, `local_left_svd`, `ele_mul`
   with truncation) are unstable for (nearly) equal singular values.
-- `tests/test_autograd.py` checks propagation, absence of a graph and `gradcheck` for every operation;
-  add new operations to its `OPS` table.
+- `tests/test_autograd.py` checks propagation, absence of a graph and `gradcheck` for every operation of the
+  registry `tests/ops.py` (except `copy`/`detach`, which cut the graph by design).
 
 ### dtype and device
 
@@ -279,6 +279,27 @@ Not available: general `tensordot` between HT tensors (module commented out), Kr
 | `trunc_rank` | `utils/trunc_rank.py` | rank from singular-value tail norm vs. `atol + rtol·‖s‖`, clipped to `max_rank` |
 | `result_dtype`, `check_device` (*internal*) | `utils/dtype_device.py` | dtype promotion and device check for multi-operand operations |
 
+## Tests
+
+- `tests/INVARIANTS.md` is the specification: every invariant has an ID (`S2`, `N4`, `E9`, …) that the tests name
+  in their docstrings, and the *Decisions* section records why (tolerances, supported range, flags, …).
+- `tests/ops.py` is the registry of operations and factories with the properties expected of them (dense reference,
+  orthogonality flag, argument strategy, storage sharing, scale). The invariant tests in `tests/invariants/` iterate
+  over it, so a new operation is tested by adding one entry.
+- `tests/strategies.py` generates inputs with hypothesis: per-node ranks (incl. over-parameterized) and component
+  kinds (orthonormal, general, rank-deficient), zero tensors, scales, canonical/`squeeze`d/arbitrary trees,
+  float32 and float64. A failing example prints a `build_ht(...)` call that rebuilds it.
+- `tests/tolerances.py` is the only place that sets numerical tolerances (error model
+  `error ≤ bound + rel · scale`, `SAFETY`, accuracy classes, `m(x)`); never use literal tolerances in tests.
+- Profiles: `dev` (50 examples, default) and `ci` (200, derandomized; `HYPOTHESIS_PROFILE=ci`). Warnings are
+  errors (`filterwarnings = ["error"]`); expected warnings need `pytest.warns`.
+- Layout: `tests/invariants/` (S, O, V, N, E across all operations), `tests/httensor/`, `tests/linalg/`,
+  `tests/transformation/`, `tests/utils/` (module-specific tests), `test_autograd.py` (A), `test_dtype_device.py`
+  (D, E4).
+- CI (`.github/workflows/ci.yml`): lint (ruff, mypy), tests against the minimum and latest torch (single thread),
+  docs (`mkdocs build --strict`); the coverage table is on the run summary, the HTML report is artifact
+  `coverage-html`.
+
 ## Typical internal call chains
 
 Useful when debugging or changing a core routine, because changes propagate:
@@ -293,7 +314,8 @@ Useful when debugging or changing a core routine, because changes propagate:
 
 - Mathematical definitions, preserved properties, complexity, examples: the docstring of the
   function (file paths in the tables above).
-- Expected behaviour of indexing: `tests/test_get_item.py`.
+- Expected behaviour of indexing: `tests/httensor/test_get_item.py`.
+- Invariants every operation must satisfy, and the decisions behind them: `tests/INVARIANTS.md`.
 - Rendered API docs: `mkdocs serve` (needs the `docs` extra), navigation in `mkdocs.yml`.
 - Package metadata, extras and lint config: `pyproject.toml`.
 
@@ -301,8 +323,10 @@ Useful when debugging or changing a core routine, because changes propagate:
 
 ```bash
 pip install -e ".[dev,docs]"   # a local .venv exists in the repo root
-pytest                               # tests/ and docstring examples in src/hiepy
+pytest                               # tests/ and docstring examples in src/hiepy (hypothesis profile "dev")
 pytest tests/                        # tests only
+HYPOTHESIS_PROFILE=ci pytest         # as in CI: 200 examples per test, derandomized
+pytest --cov --cov-report=html       # coverage (fails below 90 %), report in htmlcov/index.html
 ruff check src/hiepy tests
 mkdocs serve
 ```
