@@ -29,6 +29,7 @@ classifiers = [
 # Core dependencies required to run your library
 dependencies = [
     "torch>=2.6",
+    "numpy",  # torch warns on import ("Failed to initialize NumPy") if numpy is missing
 ]
 
 [project.optional-dependencies]
@@ -39,7 +40,6 @@ dev = [
     "hypothesis>=6.0.0",
     "ruff>=0.1.0",
     "mypy>=1.0.0",
-    "numpy",  # silences torch's "Failed to initialize NumPy" warning
 ]
 # Dependencies needed to build your documentation
 docs = [

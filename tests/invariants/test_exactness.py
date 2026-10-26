@@ -27,4 +27,4 @@ def test_matches_dense_reference(name: str, pair: tuple[HTTensor, HTTensor], dat
     actual = result.full() if isinstance(result, HTTensor) else result
     expected = op.dense(x.full(), y.full(), arg)
     dtypes = (x.dtype, y.dtype, actual.dtype)
-    assert_exact(actual, expected, size=op.input_size(x, y, arg), dtypes=dtypes)
+    assert_exact(actual, expected, size=op.input_size(x, y, arg), dtypes=dtypes, thresh=op.thresh)

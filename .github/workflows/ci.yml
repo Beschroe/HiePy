@@ -84,7 +84,7 @@ jobs:
           coverage html --fail-under=0
       - name: Upload coverage report
         if: always() && matrix.torch == 'latest'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-html
           path: htmlcov/
