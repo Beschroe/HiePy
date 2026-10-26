@@ -90,6 +90,8 @@ source = ["hiepy"]
 branch = true
 
 [tool.coverage.report]
+# Minimum total coverage (lines and branches); pytest --cov fails below it, also in CI.
+fail_under = 90
 show_missing = true
 skip_covered = true
 exclude_also = [
