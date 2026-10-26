@@ -21,7 +21,7 @@ from hypothesis import strategies as st
 import hiepy
 from hiepy import HTTensor
 from hiepy.utils.data_types import IndexKey
-from tests.tolerances import magnitude
+from tests.tolerances import abs_arg, abs_full, size
 
 type Result = HTTensor | torch.Tensor | tuple[HTTensor, dict[hiepy.Node, torch.Tensor]] | dict
 type DenseOp = Callable[[torch.Tensor, torch.Tensor, Any], torch.Tensor]
@@ -41,18 +41,6 @@ def _never(x: HTTensor, arg: object) -> bool:
 
 def _same_dtype(arg: object) -> torch.dtype | None:
     return None
-
-
-def _sum_of_magnitudes(x: HTTensor, y: HTTensor, arg: object) -> float:
-    return magnitude(x) + magnitude(y)
-
-
-def _product_of_magnitudes(x: HTTensor, y: HTTensor, arg: object) -> float:
-    return magnitude(x) * magnitude(y)
-
-
-def _magnitude(x: HTTensor, y: HTTensor, arg: object) -> float:
-    return magnitude(x)
 
 
 @dataclass(frozen=True)
@@ -76,10 +64,9 @@ class Op:
         Whether the result may share component storage and the ``DimTree`` object with ``x`` (V2 exception).
     out_dtype
         dtype of the result if it differs from the input dtype (D1), given ``arg``.
-    magnitude
-        Size of the quantities entering the result, given ``(x, y, arg)``, built from ``tests.tolerances.magnitude``.
-        N1 compares relative to the larger of this and the norm of the reference, so that cancellation (in the
-        operation or inside the HT representation) does not demand an error below rounding.
+    abs_dense
+        Counterpart of ``dense`` for absolute values, if it differs from ``dense`` (``sub``: ``X + Y``); see
+        ``rounding_scale``.
     """
 
     call: Callable[[HTTensor, HTTensor, Any], Result]
@@ -89,11 +76,18 @@ class Op:
     default: Callable[[HTTensor], Any] = _none
     shares_storage: Callable[[HTTensor, Any], bool] = _never
     out_dtype: Callable[[Any], torch.dtype | None] = _same_dtype
-    magnitude: Callable[[HTTensor, HTTensor, Any], float] = _magnitude
+    abs_dense: DenseOp | None = None
 
     def run(self, x: HTTensor, y: HTTensor) -> Result:
         """Apply the operation with its default argument."""
         return self.call(x, y, self.default(x))
+
+    def rounding_scale(self, x: HTTensor, y: HTTensor, arg: object) -> float:
+        """Size of the same computation with absolute values of all components and arguments (error model of
+        ``tests/tolerances.py``)."""
+        dense = self.abs_dense or self.dense
+        assert dense is not None
+        return size(dense(abs_full(x), abs_full(y), abs_arg(arg)))
 
 
 def ht_result(result: Result) -> HTTensor | None:
@@ -239,15 +233,14 @@ def _flag_false(x: HTTensor, arg: object) -> bool:
 # ~~~~~~~~~~~~~~~~~~~~~~~~~ Operations ~~~~~~~~~~~~~~~~~~~~~~~~~
 
 OPS: dict[str, Op] = {
-    "add": Op(lambda x, y, a: x + y, lambda X, Y, a: X + Y, _flag_false, magnitude=_sum_of_magnitudes),
-    "sub": Op(lambda x, y, a: x - y, lambda X, Y, a: X - Y, _flag_false, magnitude=_sum_of_magnitudes),
+    "add": Op(lambda x, y, a: x + y, lambda X, Y, a: X + Y, _flag_false),
+    "sub": Op(lambda x, y, a: x - y, lambda X, Y, a: X - Y, _flag_false, abs_dense=lambda X, Y, a: X + Y),
     "scalar_mul": Op(
         lambda x, y, c: hiepy.scalar_mul(x, c),
         lambda X, Y, c: c * X,
         _flag_as_input,
         args=_scalar_args,
         default=lambda x: 3.0,
-        magnitude=lambda x, y, c: abs(float(c)) * magnitude(x),
     ),
     "mode_mul": Op(
         lambda x, y, a: hiepy.mode_mul(x, *a),
@@ -255,7 +248,6 @@ OPS: dict[str, Op] = {
         _flag_false,
         args=_mode_mul_args,
         default=_default_matrix,
-        magnitude=lambda x, y, a: torch.linalg.matrix_norm(a[0], ord=2).item() * magnitude(x),
     ),
     "ele_mode_mul": Op(
         lambda x, y, a: hiepy.ele_mode_mul(x, *a),
@@ -263,9 +255,8 @@ OPS: dict[str, Op] = {
         _flag_false,
         args=_ele_mode_mul_args,
         default=_default_vector,
-        magnitude=lambda x, y, a: a[0].abs().max().item() * magnitude(x),
     ),
-    "ele_mul": Op(lambda x, y, a: x * y, lambda X, Y, a: X * Y, _flag_false, magnitude=_product_of_magnitudes),
+    "ele_mul": Op(lambda x, y, a: x * y, lambda X, Y, a: X * Y, _flag_false),
     "ele_mul_truncated": Op(
         lambda x, y, opts: hiepy.ele_mul(x, y, opts),
         None,
@@ -273,7 +264,7 @@ OPS: dict[str, Op] = {
         args=lambda x: _trunc_opts(with_rtol=False),
         default=lambda x: {"max_rank": 2},
     ),
-    "contract": Op(lambda x, y, a: x @ y, lambda X, Y, a: (X * Y).sum(), None, magnitude=_product_of_magnitudes),
+    "contract": Op(lambda x, y, a: x @ y, lambda X, Y, a: (X * Y).sum(), None),
     "norm": Op(lambda x, y, a: hiepy.norm(x), lambda X, Y, a: torch.linalg.norm(X), None),
     "orthog": Op(lambda x, y, a: hiepy.orthog(x), lambda X, Y, a: X, _flag_true),
     "truncate_svd": Op(

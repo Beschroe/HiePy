@@ -8,7 +8,9 @@ A check has the form
   truncation, ``sqrt(Σσ²)`` for discarded singular values),
 - ``rel`` is the relative rounding error, determined by the ``Accuracy`` class of the computed quantities and the
   machine epsilon ``ε`` of the least precise dtype involved,
-- ``scale`` is the size of the quantities entering the computation (e.g. ``m(x)``, see ``magnitude``).
+- ``scale`` is the size of the computation: the same computation carried out with the absolute values of all
+  components and arguments (``abs_full``, ``abs_arg``). This is the textbook bound for rounding,
+  ``|fl(Σ aᵢbᵢ) − Σ aᵢbᵢ| ≤ γ·Σ|aᵢ||bᵢ|``; it captures cancellation in the operation and in the representation.
 
 The only tuning knob is ``SAFETY``. A failing check reports all three parts, so it is visible which part of the
 model is too tight.
@@ -56,17 +58,32 @@ def resolution(accuracy: Accuracy, *dtypes: torch.dtype) -> float:
     return 0.0 if accuracy is Accuracy.ROUNDING else machine_eps(*dtypes) ** 0.5
 
 
-def magnitude(x: HTTensor) -> float:
-    """``m(x)``: product of the spectral norms of all components (transfer tensors matricized as ``(r_l r_r) x r_t``).
+def abs_full(x: HTTensor) -> torch.Tensor:
+    """Dense float64 tensor reconstructed from the absolute values of all components of ``x``.
 
-    Upper bound of ``‖x‖`` that equals it for orthonormal components; rounding errors of operations on ``x`` scale
-    with ``m(x)`` rather than with ``‖x‖`` when the representation contains cancellation.
+    Rounding in any computation with ``x`` is bounded by the same computation on ``abs_full(x)`` (times a small
+    multiple of ε); ``‖abs_full(x)‖ ≥ ‖x‖``, with equality if no cancellation occurs in the representation.
     """
-    result = 1.0
-    for t in x.dtree.get_nodes():
-        C = x.U[t] if x.dtree.is_leaf(t) else x.B[t].reshape(-1, x.B[t].shape[2])
-        result *= torch.linalg.matrix_norm(C.detach().double(), ord=2).item()
-    return result
+    U = {t: u.detach().abs().double() for t, u in x.U.items()}
+    B = {t: b.detach().abs().double() for t, b in x.B.items()}
+    return HTTensor(U=U, B=B, dtree=x.dtree).full()
+
+
+def abs_arg(arg: object) -> object:
+    """Absolute value of the numbers in an operation argument (tensors as float64, Python floats); indices, keys,
+    dtypes and other objects are returned unchanged. Tuples are processed entrywise."""
+    if isinstance(arg, torch.Tensor):
+        return arg.detach().abs().double()
+    if isinstance(arg, float):
+        return abs(arg)
+    if isinstance(arg, tuple):
+        return tuple(abs_arg(a) for a in arg)
+    return arg
+
+
+def size(T: torch.Tensor) -> float:
+    """Norm of the result of an absolute-value computation (absolute value for a scalar)."""
+    return torch.linalg.norm(T.double()).item()
 
 
 @dataclass(frozen=True)
@@ -101,21 +118,22 @@ def assert_exact(
     expected: torch.Tensor,
     *,
     scale: float | None = None,
-    scale_label: str = "input size",
+    scale_label: str = "|·| computation",
     dtypes: tuple[torch.dtype, ...] | None = None,
 ) -> None:
-    """Exact operations: ``‖actual − expected‖ ≤ SAFETY · ε · max(‖expected‖, scale)``.
+    """Exact operations: ``‖actual − expected‖ ≤ SAFETY · ε · scale``.
 
-    ``scale`` is the size of the inputs entering the result, so that cancellation does not demand an error below
-    rounding; ``dtypes`` are the precisions involved (default: those of ``actual`` and ``expected``).
+    ``scale`` is the size of the computation with absolute values (default: ``‖expected‖``, sufficient when the
+    computation has no cancellation); ``dtypes`` are the precisions involved (default: those of ``actual`` and
+    ``expected``).
     """
     assert actual.shape == expected.shape, f"shape {tuple(actual.shape)} != {tuple(expected.shape)}"
     dtypes = dtypes or (actual.dtype, expected.dtype)
     error = torch.linalg.norm(actual.double() - expected.double()).item()
-    reference = torch.linalg.norm(expected.double()).item()
-    size, label = (scale, scale_label) if scale is not None and scale > reference else (reference, "‖expected‖")
+    if scale is None:
+        scale, scale_label = size(expected), "‖expected‖"
     rel = relative_error(Accuracy.ROUNDING, *dtypes)
-    Bound(0.0, rel, size, _rel_label(Accuracy.ROUNDING, dtypes), label).check(error)
+    Bound(0.0, rel, scale, _rel_label(Accuracy.ROUNDING, dtypes), scale_label).check(error)
 
 
 def assert_within(
@@ -123,7 +141,7 @@ def assert_within(
     bound: float,
     *,
     scale: float,
-    scale_label: str = "m(x)",
+    scale_label: str = "|·| computation",
     accuracy: Accuracy = Accuracy.ROUNDING,
     dtypes: tuple[torch.dtype, ...] = (torch.float64,),
 ) -> None:

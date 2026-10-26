@@ -21,7 +21,7 @@ import hiepy
 from hiepy import HTTensor
 from hiepy.utils.data_types import IndexKey
 from tests.helpers import assert_valid_structure, make_dense_htt
-from tests.tolerances import assert_exact, magnitude
+from tests.tolerances import abs_full, assert_exact, size
 
 type Key = IndexKey | tuple[IndexKey, ...]
 
@@ -29,11 +29,11 @@ type Key = IndexKey | tuple[IndexKey, ...]
 # ~~~~~~~~~~~~~~~~~~~~~~~~~ Helpers and fixtures ~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
-def _assert_matches(result: HTTensor | torch.Tensor, expected: torch.Tensor, source: HTTensor) -> None:
+def _assert_matches(result: HTTensor | torch.Tensor, expected: torch.Tensor, abs_expected: torch.Tensor) -> None:
     """Check result type, shape and values against the dense reference.
 
-    The values are compared relative to the size ``m(source)`` of the indexed tensor: a selected entry can be much
-    smaller than the tensor, while rounding scales with the tensor (Q7).
+    ``abs_expected`` is the same selection from ``abs_full(x)``: rounding scales with the absolute values of the
+    terms of the selected entries, which can be much larger than the entries themselves (error model).
     """
     if expected.ndim >= 2:
         assert isinstance(result, HTTensor)
@@ -44,7 +44,7 @@ def _assert_matches(result: HTTensor | torch.Tensor, expected: torch.Tensor, sou
         assert not isinstance(result, HTTensor)
         dense = result
     assert dense.shape == expected.shape
-    assert_exact(dense, expected, scale=magnitude(source), scale_label="m(x)")
+    assert_exact(dense, expected, scale=size(abs_expected))
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~ Agreement with dense torch indexing ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -91,7 +91,7 @@ KEYS_ORDER_3 = [
 @pytest.mark.parametrize("key", KEYS_ORDER_3, ids=repr)
 def test_matches_torch_order_3(key: Key):
     dense, x = make_dense_htt((3, 4, 5))
-    _assert_matches(hiepy.get(x, key), dense[key], x)
+    _assert_matches(hiepy.get(x, key), dense[key], abs_full(x)[key])
 
 
 KEYS_ORDER_5 = [
@@ -113,7 +113,7 @@ def test_matches_torch_order_5(key: Key):
     """Removing several modes at different tree positions restructures the tree correctly."""
     dense, x = make_dense_htt((2, 3, 2, 3, 2))
     result = hiepy.get(x, key)
-    _assert_matches(result, dense[key], x)
+    _assert_matches(result, dense[key], abs_full(x)[key])
     if isinstance(result, HTTensor):
         assert_valid_structure(result)
 
@@ -121,7 +121,7 @@ def test_matches_torch_order_5(key: Key):
 @pytest.mark.parametrize("key", [0, -1, slice(1, 3), (0, 1), (slice(None), -1), (1, slice(None))], ids=repr)
 def test_matches_torch_order_2(key: Key):
     dense, x = make_dense_htt((3, 4))
-    _assert_matches(hiepy.get(x, key), dense[key], x)
+    _assert_matches(hiepy.get(x, key), dense[key], abs_full(x)[key])
 
 
 def test_all_entries_of_small_tensor():
@@ -130,14 +130,16 @@ def test_all_entries_of_small_tensor():
     for i in range(-2, 2):
         for j in range(-3, 3):
             for k in range(-2, 2):
-                _assert_matches(x[i, j, k], dense[i, j, k], x)
+                _assert_matches(x[i, j, k], dense[i, j, k], abs_full(x)[i, j, k])
 
 
 def test_entry_example_from_docstring():
     dense = torch.arange(1, 28, dtype=torch.double).reshape(3, 3, 3)
     x = hiepy.to_htt(dense, {"atol": 1e-8})
-    assert_exact(hiepy.get(x, (0, 1, 2)), torch.tensor(6.0, dtype=torch.double), scale=magnitude(x))
-    assert_exact(hiepy.get(x, (-1, -1, -1)), torch.tensor(27.0, dtype=torch.double), scale=magnitude(x))
+    assert_exact(hiepy.get(x, (0, 1, 2)), torch.tensor(6.0, dtype=torch.double), scale=size(abs_full(x)[0, 1, 2]))
+    assert_exact(
+        hiepy.get(x, (-1, -1, -1)), torch.tensor(27.0, dtype=torch.double), scale=size(abs_full(x)[-1, -1, -1])
+    )
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~ Entry points ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -150,28 +152,28 @@ def test_entry_points_agree(key: Key):
     via_method = x.get(key)
     via_getitem = x[key]
     for result in (via_method, via_getitem):
-        _assert_matches(result, dense[key], x)
-    _assert_matches(via_function, dense[key], x)
+        _assert_matches(result, dense[key], abs_full(x)[key])
+    _assert_matches(via_function, dense[key], abs_full(x)[key])
 
 
 def test_getitem_with_comma_syntax():
     dense, x = make_dense_htt((3, 4, 5))
-    _assert_matches(x[0, 1:3], dense[0, 1:3], x)
-    _assert_matches(x[-1, :, -2], dense[-1, :, -2], x)
+    _assert_matches(x[0, 1:3], dense[0, 1:3], abs_full(x)[0, 1:3])
+    _assert_matches(x[-1, :, -2], dense[-1, :, -2], abs_full(x)[-1, :, -2])
 
 
 def test_negative_index_equals_positive_counterpart():
     _, x = make_dense_htt((3, 4, 5))
-    assert_exact(x[-1].full(), x[2].full(), scale=magnitude(x))
-    assert_exact(x[:, -4].full(), x[:, 0].full(), scale=magnitude(x))
-    assert_exact(x[-3, -4, -5], x[0, 0, 0], scale=magnitude(x))
+    assert_exact(x[-1].full(), x[2].full(), scale=size(abs_full(x)[2]))
+    assert_exact(x[:, -4].full(), x[:, 0].full(), scale=size(abs_full(x)[:, 0]))
+    assert_exact(x[-3, -4, -5], x[0, 0, 0], scale=size(abs_full(x)[0, 0, 0]))
 
 
 def test_index_like_integers_are_accepted():
     """Objects implementing __index__ (e.g. 0-d integer tensors) behave like ints."""
     dense, x = make_dense_htt((3, 4, 5))
-    _assert_matches(x[torch.tensor(1)], dense[1], x)
-    _assert_matches(x[torch.tensor(-1), 2], dense[-1, 2], x)
+    _assert_matches(x[torch.tensor(1)], dense[1], abs_full(x)[1])
+    _assert_matches(x[torch.tensor(-1), 2], dense[-1, 2], abs_full(x)[-1, 2])
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~ Singleton handling ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -181,17 +183,17 @@ def test_length_one_slice_keeps_mode():
     dense, x = make_dense_htt((3, 4, 5))
     result = x[0:1]
     assert result.shape == (1, 4, 5)
-    _assert_matches(result, dense[0:1], x)
-    _assert_matches(x[:, 2:3, 0], dense[:, 2:3, 0], x)
+    _assert_matches(result, dense[0:1], abs_full(x)[0:1])
+    _assert_matches(x[:, 2:3, 0], dense[:, 2:3, 0], abs_full(x)[:, 2:3, 0])
 
 
 def test_untouched_singleton_modes_are_kept():
     dense, x = make_dense_htt((3, 1, 5))
-    _assert_matches(x[1:3], dense[1:3], x)
-    _assert_matches(x[()], dense[()], x)
-    _assert_matches(x[(slice(None),)], dense[(slice(None),)], x)
-    _assert_matches(x[0], dense[0], x)
-    _assert_matches(x[:, :, 2], dense[:, :, 2], x)
+    _assert_matches(x[1:3], dense[1:3], abs_full(x)[1:3])
+    _assert_matches(x[()], dense[()], abs_full(x)[()])
+    _assert_matches(x[(slice(None),)], dense[(slice(None),)], abs_full(x)[(slice(None),)])
+    _assert_matches(x[0], dense[0], abs_full(x)[0])
+    _assert_matches(x[:, :, 2], dense[:, :, 2], abs_full(x)[:, :, 2])
 
 
 def test_order_one_result_is_dense_vector():
@@ -199,14 +201,14 @@ def test_order_one_result_is_dense_vector():
     result = x[1, 2]
     assert isinstance(result, torch.Tensor) and not isinstance(result, HTTensor)
     assert result.shape == (5,)
-    _assert_matches(result, dense[1, 2], x)
+    _assert_matches(result, dense[1, 2], abs_full(x)[1, 2])
 
 
 def test_order_zero_result_is_scalar_tensor():
     dense, x = make_dense_htt((3, 4, 5))
     result = x[1, 2, 3]
     assert isinstance(result, torch.Tensor) and result.ndim == 0
-    _assert_matches(result, dense[1, 2, 3], x)
+    _assert_matches(result, dense[1, 2, 3], abs_full(x)[1, 2, 3])
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~ Error handling ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -295,9 +297,9 @@ def test_result_supports_further_operations(key: Key):
     result = hiepy.get(x, key)
     expected = dense[key]
     assert_valid_structure(result)
-    assert_exact(result.orthog().full(), expected, scale=magnitude(x))
+    assert_exact(result.orthog().full(), expected, scale=size(abs_full(result)))
     assert_exact(result.norm(), torch.linalg.norm(expected))
-    assert_exact(hiepy.contract(result, result), torch.sum(expected * expected), scale=magnitude(x) ** 2)
+    assert_exact(hiepy.contract(result, result), torch.sum(expected * expected), scale=size(abs_full(result)) ** 2)
 
 
 def test_indexing_a_non_canonical_tree():
@@ -307,14 +309,14 @@ def test_indexing_a_non_canonical_tree():
     x = hiepy.to_htt(dense, {"atol": 1e-13}).squeeze()
     dense = dense.squeeze(1)
     for key in [0, -1, (slice(None), 2), (1, slice(1, 3), -1), (0, 0), (slice(None), slice(None), 4)]:
-        _assert_matches(x[key], dense[key], x)
+        _assert_matches(x[key], dense[key], abs_full(x)[key])
 
 
 def test_repeated_indexing_matches_single_indexing():
     dense, x = make_dense_htt((3, 4, 5, 2))
-    _assert_matches(x[1][2], dense[1, 2], x)
-    _assert_matches(x[:, 1:3][0], dense[0, 1:3], x)
-    _assert_matches(x[-1][:, -1], dense[-1, :, -1], x)
+    _assert_matches(x[1][2], dense[1, 2], abs_full(x)[1, 2])
+    _assert_matches(x[:, 1:3][0], dense[0, 1:3], abs_full(x)[0, 1:3])
+    _assert_matches(x[-1][:, -1], dense[-1, :, -1], abs_full(x)[-1, :, -1])
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~ Autograd ~~~~~~~~~~~~~~~~~~~~~~~~~
