@@ -73,7 +73,8 @@ docstrings referenced in the functionality map below.
 - Adding a new public operation therefore means: (1) a module with the function,
   (2) export in `hiepy/__init__.py` (import + `__all__`), (3) optionally a wrapper method on
   `HTTensor`, (4) an entry in the matching `docs/api/*.md` page, (5) an entry in the registry `tests/ops.py`
-  (and, for a new kind of property, an invariant in `tests/INVARIANTS.md`).
+  with its dense reference and, if the result can be larger than `‖x‖`, its `size` of the inputs (and, for a new
+  kind of property, an invariant in `tests/INVARIANTS.md`).
 - Argument order: the tensor comes first, e.g. `mode_mul(x, A, dim)`, `mode_mul_torch(x, A, dim)`,
   `ele_mode_mul(x, v, dim)`, `multi_mode_mul_torch(x, matrices)`. Internal calls use keyword
   arguments (`x=..., A=...`); keep that style.
@@ -289,10 +290,12 @@ Not available: general `tensordot` between HT tensors (module commented out), Kr
 - `tests/strategies.py` generates inputs with hypothesis: per-node ranks (incl. over-parameterized) and component
   kinds (orthonormal, general, rank-deficient), zero tensors, scales, canonical/`squeeze`d/arbitrary trees,
   float32 and float64. A failing example prints a `build_ht(...)` call that rebuilds it.
-- `tests/tolerances.py` is the only place that sets numerical tolerances (error model
-  `error ≤ bound + rel · scale`; `rel = SAFETY · ε` of the least precise dtype, `scale` = the same computation with
-  absolute values of all components and arguments); never use literal tolerances in tests. `tests/test_tolerances.py`
-  checks that the model still detects real deviations.
+- `tests/tolerances.py` is the only place that sets numerical tolerances; never use literal tolerances in tests.
+  Error model as in the LAPACK test suite: test ratio `(error − bound) / (ε · size of the inputs) ≤ THRESH = 1000`,
+  with `ε` of the least precise dtype and the size of the inputs from norm inequalities (`Op.input_size` in
+  `tests/ops.py`: `‖x‖`, `‖x‖ + ‖y‖`, `‖x‖·‖y‖`, …); orthonormality `‖FᵀF − I‖ / (k·ε) ≤ THRESH`; singular values
+  from Gramians use the margin `√ε · size`. Details and measurements: `tests/INVARIANTS.md` (Conventions, Q12).
+  `tests/test_tolerances.py` checks that the model still detects real deviations.
 - Profiles: `dev` (50 examples, default) and `ci` (200, derandomized; `HYPOTHESIS_PROFILE=ci`). Warnings are
   errors (`filterwarnings = ["error"]`); expected warnings need `pytest.warns`.
 - Layout: `tests/invariants/` (S, O, V, N, E across all operations), `tests/httensor/`, `tests/linalg/`,
