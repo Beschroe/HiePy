@@ -58,7 +58,9 @@ Related top-level locations:
 - `tests/` — pytest suite, organized around the invariant catalog (see "Tests" below).
 - `test.ipynb` (repo root) — exploratory notebook, not a test.
 - `docs/` + `mkdocs.yml` — MkDocs (material + mkdocstrings, NumPy docstring style). The pages in
-  `docs/api/*.md` list the documented members **explicitly** (`::: hiepy.<name>`).
+  `docs/api/*.md` list the documented members **explicitly** (`::: hiepy.<name>`). Every push to `main` publishes
+  the documentation to <https://beschroe.github.io/HiePy/> (`.github/workflows/docs.yml`, GitHub Pages via Actions);
+  pull requests only check that it builds (`docs` job in `ci.yml`).
 
 ## Architecture and conventions
 

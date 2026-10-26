@@ -1,8 +1,13 @@
 site_name: hiepy Documentation
 site_description: Hierarchical Tucker tensors in PyTorch.
 site_author: Benedikt Schroeter
+site_url: https://beschroe.github.io/HiePy/
+repo_url: https://github.com/Beschroe/HiePy
+repo_name: Beschroe/HiePy
 
+# MathJax configuration for pymdownx.arithmatex first, then MathJax itself
 extra_javascript:
+  - javascripts/mathjax.js
   - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
 
 theme:
