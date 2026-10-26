@@ -30,6 +30,9 @@ from hiepy import HTTensor
 # Largest admissible test ratio. LAPACK uses 30; the measured maximum on the inputs of tests/strategies.py is 163
 # (rank-deficient representations by design), so 1000 leaves about 6x room (INVARIANTS.md, Q12).
 THRESH = 1000
+# contract: the cancellation in the representations of both operands enters multiplicatively; measured maximum
+# 16 910 (INVARIANTS.md, Q12).
+THRESH_CONTRACT = 100_000
 
 
 class Accuracy(Enum):
@@ -69,15 +72,16 @@ def _check(
     accuracy: Accuracy,
     dtypes: tuple[torch.dtype, ...],
     what: str,
+    thresh: float = THRESH,
 ) -> None:
     """Assert ``(error − bound) / (ε · size) ≤ limit`` and report the ratio and its parts otherwise."""
     eps = machine_eps(*dtypes)
-    limit = THRESH if accuracy is Accuracy.ROUNDING else eps**-0.5
+    limit = thresh if accuracy is Accuracy.ROUNDING else eps**-0.5
     if error <= bound + limit * eps * size:
         return
     name = str(min(dtypes, key=lambda d: torch.finfo(d).bits)).removeprefix("torch.")
     ratio = (error - bound) / (eps * size) if size > 0 else float("inf")
-    limit_label = f"THRESH {THRESH}" if accuracy is Accuracy.ROUNDING else f"1/sqrt(ε) {limit:.1e} (Gramian)"
+    limit_label = f"THRESH {thresh:g}" if accuracy is Accuracy.ROUNDING else f"1/sqrt(ε) {limit:.1e} (Gramian)"
     raise AssertionError(
         f"{what}: test ratio {ratio:.3g} > {limit_label}; ratio = (error {error:.4e} − bound {bound:.4e}) "
         f"/ (ε({name}) {eps:.2e} · {size_label} {size:.4e})"
@@ -91,8 +95,9 @@ def assert_exact(
     size: float | None = None,
     size_label: str = "size of inputs",
     dtypes: tuple[torch.dtype, ...] | None = None,
+    thresh: float = THRESH,
 ) -> None:
-    """Exact operations: ``‖actual − expected‖ / (ε · size) ≤ THRESH``.
+    """Exact operations: ``‖actual − expected‖ / (ε · size) ≤ thresh`` (default ``THRESH``).
 
     ``size`` is the size of the inputs (default: ``‖expected‖``, for operations that do not change the size, such
     as copies and round trips); ``dtypes`` are the precisions involved (default: those of ``actual`` and
@@ -103,7 +108,7 @@ def assert_exact(
     error = torch.linalg.norm(actual.double() - expected.double()).item()
     if size is None:
         size, size_label = frobenius(expected), "‖expected‖"
-    _check(error, 0.0, size, size_label, Accuracy.ROUNDING, dtypes, "deviation")
+    _check(error, 0.0, size, size_label, Accuracy.ROUNDING, dtypes, "deviation", thresh)
 
 
 def assert_within(

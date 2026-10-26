@@ -21,7 +21,7 @@ from hypothesis import strategies as st
 import hiepy
 from hiepy import HTTensor
 from hiepy.utils.data_types import IndexKey
-from tests.tolerances import frobenius
+from tests.tolerances import THRESH, THRESH_CONTRACT, frobenius
 
 type Result = HTTensor | torch.Tensor | tuple[HTTensor, dict[hiepy.Node, torch.Tensor]] | dict
 type DenseOp = Callable[[torch.Tensor, torch.Tensor, Any], torch.Tensor]
@@ -67,6 +67,9 @@ class Op:
     size
         Size of the inputs (error model of ``tests/tolerances.py``): the largest norm the result can have by norm
         inequalities, given ``(‖x‖, ‖y‖, arg)``; default ``‖x‖``.
+    thresh
+        Largest admissible test ratio of the exact comparison (default ``THRESH``; ``contract`` uses
+        ``THRESH_CONTRACT``).
     """
 
     call: Callable[[HTTensor, HTTensor, Any], Result]
@@ -77,6 +80,7 @@ class Op:
     shares_storage: Callable[[HTTensor, Any], bool] = _never
     out_dtype: Callable[[Any], torch.dtype | None] = _same_dtype
     size: Callable[[float, float, Any], float] = lambda nx, ny, a: nx
+    thresh: float = THRESH
 
     def run(self, x: HTTensor, y: HTTensor) -> Result:
         """Apply the operation with its default argument."""
@@ -264,7 +268,13 @@ OPS: dict[str, Op] = {
         args=lambda x: _trunc_opts(with_rtol=False),
         default=lambda x: {"max_rank": 2},
     ),
-    "contract": Op(lambda x, y, a: x @ y, lambda X, Y, a: (X * Y).sum(), None, size=lambda nx, ny, a: nx * ny),
+    "contract": Op(
+        lambda x, y, a: x @ y,
+        lambda X, Y, a: (X * Y).sum(),
+        None,
+        size=lambda nx, ny, a: nx * ny,
+        thresh=THRESH_CONTRACT,
+    ),
     "norm": Op(lambda x, y, a: hiepy.norm(x), lambda X, Y, a: torch.linalg.norm(X), None),
     "orthog": Op(lambda x, y, a: hiepy.orthog(x), lambda X, Y, a: X, _flag_true),
     "truncate_svd": Op(

@@ -297,7 +297,8 @@ Not available: general `tensordot` between HT tensors (module commented out), Kr
   kinds (orthonormal, general, rank-deficient), zero tensors, scales, canonical/`squeeze`d/arbitrary trees,
   float32 and float64. A failing example prints a `build_ht(...)` call that rebuilds it.
 - `tests/tolerances.py` is the only place that sets numerical tolerances; never use literal tolerances in tests.
-  Error model as in the LAPACK test suite: test ratio `(error − bound) / (ε · size of the inputs) ≤ THRESH = 1000`,
+  Error model as in the LAPACK test suite: test ratio `(error − bound) / (ε · size of the inputs) ≤ THRESH = 1000`
+  (`contract`: `THRESH_CONTRACT = 100 000`, `Op.thresh`),
   with `ε` of the least precise dtype and the size of the inputs from norm inequalities (`Op.input_size` in
   `tests/ops.py`: `‖x‖`, `‖x‖ + ‖y‖`, `‖x‖·‖y‖`, …); orthonormality `‖FᵀF − I‖ / (k·ε) ≤ THRESH`; singular values
   from Gramians use the margin `√ε · size`. Details and measurements: `tests/INVARIANTS.md` (Conventions, Q12).

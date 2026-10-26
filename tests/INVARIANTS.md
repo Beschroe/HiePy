@@ -26,6 +26,8 @@ in [Decisions](#decisions).
     `add`/`sub`, `‖x‖·‖y‖` for `ele_mul`/`contract`, `|c|·‖x‖` for `scalar_mul`, `‖A‖·‖x‖` for `mode_mul`,
     `max|v|·‖x‖` for `ele_mode_mul` (`tests/ops.py`, `Op.input_size`).
   - Orthonormality as in LAPACK: `‖FᵀF − I‖_F / (k · ε) ≤ THRESH` for a frame with `k` columns.
+  - Exception: `contract` uses `THRESH_CONTRACT = 100 000`, because the cancellation in the representations of
+    both operands enters multiplicatively (Q12).
   - Exception: singular values from Gramian eigenvalues (`truncate_gram`) are only accurate to `√ε` times the size
     of the inputs; there the margin is `√ε · size` instead of `THRESH · ε · size` (Q5).
 
@@ -175,7 +177,9 @@ Rules from CLAUDE.md ("Autograd"), covered by `tests/test_autograd.py`.
   that approach would need exceptions per operation; relative to the size of the inputs, the ratio is at most `6` for
   99 % of the cases and `163` at worst (float64, `norm` of a rank-deficient representation; `37` in float32).
   Hence the LAPACK approach with `THRESH = 1000` instead of 30, because the strategies contain rank-deficient
-  representations on purpose (about 6 × room above the measured maximum). It replaced, in this order, a product of
-  the spectral norms of the components and the norm of the same computation with absolute values; both were harder
-  to explain. `tests/test_tolerances.py` checks that a relative deviation of `1e-9` (float64) or `1e-2` (float32) of
+  representations on purpose (about 6 × room above the measured maximum). `contract` is the exception: there the
+  cancellation in the representations of both operands multiplies; over 3000 random examples its ratio reached
+  `16 910` (99.9 %: `2206`, the other operations stayed below `120`), so it uses `THRESH_CONTRACT = 100 000` (again
+  about 6 × room). The LAPACK approach replaced, in this order, a product of the spectral norms of the components and
+  the norm of the same computation with absolute values; both were harder to explain. `tests/test_tolerances.py` checks that a relative deviation of `1e-9` (float64) or `1e-2` (float32) of
   the size of the inputs is always detected, so the model cannot be loosened unnoticed.
