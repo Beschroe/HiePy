@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://beschroe.github.io/HiePy/
+    about: Usage, guarantees and cost of every function.

@@ -1,0 +1,44 @@
+name: Bug report
+description: Something in hiepy does not work as documented.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. A small example that reproduces it helps most.
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What happened, and what did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: example
+    attributes:
+      label: Minimal example
+      description: |
+        Short code that reproduces the problem, ideally with fixed sizes and a seeded `randn` (`generator=torch.Generator().manual_seed(0)`).
+      render: python
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Output or traceback
+      description: The full error message, or the wrong result next to the expected one.
+      render: text
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: |
+        Output of `python -c "import sys, torch, hiepy; print(hiepy.__version__, torch.__version__, sys.version.split()[0])"`
+      placeholder: 0.1.0 2.6.0 3.12.4
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: Operating system
+      placeholder: Ubuntu 24.04, Windows 11, macOS 15, ...
