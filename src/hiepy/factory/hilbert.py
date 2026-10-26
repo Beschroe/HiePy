@@ -8,6 +8,7 @@ to decompose the Cauchy kernel into a sum of separable components.
 import torch
 
 from hiepy.httensor.httensor import HTTensor
+from hiepy.utils.checks import check_shape
 from hiepy.linalg.diagonal_tensor import diagonal_tensor
 from hiepy.utils.data_types import Shape
 from hiepy.utils.dimtree import DimTree
@@ -49,6 +50,11 @@ def hilbert(
     HTTensor
         A tensor approximating the Hilbert tensor.
 
+    Raises
+    ------
+    ValueError
+        If a mode of ``shape`` has size 0 or ``M < 1``.
+
     Notes
     -----
     - The hierarchical rank $R$ is constant across all nodes of the tree,
@@ -70,6 +76,9 @@ def hilbert(
     >>> x.full()[:4,0,0]
     tensor([0.3333, 0.2500, 0.2000, 0.1667])
     """
+    check_shape(shape)
+    if M < 1:
+        raise ValueError(f"Argument 'M' must be at least 1, got {M}.")
 
     # Construct dimtree
     d = len(shape)

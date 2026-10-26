@@ -9,6 +9,7 @@ from __future__ import annotations
 import torch
 
 from hiepy.httensor.httensor import HTTensor as HTTensor
+from hiepy.utils.checks import check_shape
 from hiepy.utils.data_types import Shape
 from hiepy.utils.dimtree import DimTree
 
@@ -45,6 +46,11 @@ def zeros(
         Hierarchical Tucker tensor of shape ``shape`` with all entries equal
         to zero.
 
+    Raises
+    ------
+    ValueError
+        If a mode of ``shape`` has size 0.
+
     Notes
     -----
     - The output tensor is represented exactly in HT format.
@@ -68,6 +74,7 @@ def zeros(
             [[0., 0.],
              [0., 0.]]])
     """
+    check_shape(shape)
     # Create leaf matrices and transfer tensors
     dtree = DimTree.from_order(len(shape))
     U = {leaf: torch.zeros(shape[leaf[0]], 1, dtype=dtype, device=device) for leaf in dtree.get_leaves()}

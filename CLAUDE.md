@@ -170,6 +170,11 @@ docstrings referenced in the functionality map below.
   then delegates rank selection to `utils/trunc_rank.py::trunc_rank`.
 - Which keys each routine honours is listed in its docstring (`ele_mul` ignores `rtol` and warns).
 - `truncate*` returns a tuple `(tensor, discarded_singular_values_per_node)`, not just a tensor.
+- Options are validated at the entry of every truncating routine by `utils/checks.py::check_trunc_opts` (unknown
+  keys, negative/non-finite tolerances, `max_rank < 1` raise); `trunc_rank` and `left_svd_gramian` raise
+  `ValueError` for non-finite values (supported range: norms up to about `1e154` in float64).
+- HT tensors have no empty modes and no rank 0: factories and `to_htt` check shapes with
+  `utils/checks.py::check_shape`; empty slices in `get`, `rank < 1`, `M < 1` and zero-row matrices raise.
 
 ### Code style and tooling
 

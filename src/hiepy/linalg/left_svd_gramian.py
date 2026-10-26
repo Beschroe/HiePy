@@ -40,6 +40,12 @@ def left_svd_gramian(G: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         - ``U`` contains the left singular vectors as columns.
         - `S` contains the singular values in descending order.
 
+    Raises
+    ------
+    ValueError
+        If ``G`` has non-finite entries, e.g. because the Gram matrix of a tensor with norm beyond about $10^{154}$
+        overflows in float64.
+
     Notes
     -----
     - The input is assumed to be symmetric and positive semidefinite.
@@ -62,6 +68,12 @@ def left_svd_gramian(G: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
     >>> torch.allclose(s_svd, s_gram)
     True
     """
+
+    if not torch.isfinite(G).all():
+        raise ValueError(
+            "The Gram matrix is not finite; the tensor is outside the supported range (norm up to about 1e154 in "
+            "float64, beyond which the Gram matrix overflows)."
+        )
 
     # Eig decomposition
     eig_val, Q = torch.linalg.eigh(G)

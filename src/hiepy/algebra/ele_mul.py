@@ -13,6 +13,7 @@ import torch
 
 from hiepy.httensor.httensor import HTTensor as HTTensor
 from hiepy.linalg.left_svd_gramian import left_svd_gramian
+from hiepy.utils.checks import check_trunc_opts
 from hiepy.utils.data_types import TruncOpts
 from hiepy.utils.dtype_device import check_device, result_dtype
 from hiepy.utils.trunc_rank import trunc_rank
@@ -58,7 +59,11 @@ def ele_mul(x: HTTensor, y: HTTensor, opts: TruncOpts = {}) -> HTTensor:
     ------
     ValueError
         If the dimension trees are incompatible, or if the full tensor
-        shapes do not match.
+        shapes do not match, if ``opts`` contains an unknown key, a negative or non-finite tolerance or
+        ``max_rank < 1``, or if the Gram matrices overflow (norm of the product beyond about $10^{154}$ in float64).
+
+    TypeError
+        If a tolerance in ``opts`` is not a real number or ``max_rank`` is not an int.
 
     RuntimeError
         If ``x`` and ``y`` live on different devices.
@@ -114,6 +119,7 @@ def ele_mul(x: HTTensor, y: HTTensor, opts: TruncOpts = {}) -> HTTensor:
     if x.shape != y.shape:
         raise ValueError(f"Shape of 'y' {y.shape} does not match shape of 'x' {x.shape}")
     check_device(x=x, y=y)
+    check_trunc_opts(opts)
     dtype = result_dtype(x, y)
     x, y = x.to(dtype=dtype), y.to(dtype=dtype)
 
