@@ -206,7 +206,7 @@ def test_contract_promotes_dtype(dtype_x: torch.dtype, dtype_y: torch.dtype):
     result = hiepy.contract(x, y)
     assert result.dtype == torch.float64
     expected = (x.full().double() * y.full().double()).sum()
-    assert_exact(result, expected, scale=x.norm().item() * y.norm().item(), dtypes=(dtype_x, dtype_y))
+    assert_exact(result, expected, size=x.norm().item() * y.norm().item(), dtypes=(dtype_x, dtype_y))
 
 
 @pytest.mark.parametrize(("dtype_x", "dtype_A"), MIXED_DTYPES)

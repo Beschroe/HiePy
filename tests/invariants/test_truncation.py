@@ -18,7 +18,7 @@ from hypothesis import strategies as st
 import hiepy
 from hiepy import HTTensor
 from tests.strategies import decaying_dense, ht_pairs, ht_tensors
-from tests.tolerances import Accuracy, abs_full, assert_within, resolution, size
+from tests.tolerances import Accuracy, assert_within, frobenius, resolution
 
 TOLS = [1e-2, 1e-4, 1e-6, 1e-8, 1e-10, 1e-12]
 
@@ -75,7 +75,7 @@ def test_truncation_meets_tolerance(name: str, kind: str, x: HTTensor, data: st.
     X = x.full()
     opts, bound = _opts(kind, tol, torch.linalg.norm(X).item())
     result, _ = truncate(x, opts)
-    assert_within(_error(X, result), bound, scale=size(abs_full(x)), dtypes=(x.dtype,))
+    assert_within(_error(X, result), bound, size=frobenius(x), dtypes=(x.dtype,))
 
 
 @pytest.mark.parametrize("kind", ["atol", "rtol", "both"])
@@ -85,7 +85,7 @@ def test_to_htt_meets_tolerance(kind: str, x: HTTensor, tol: float):
     T = x.full()
     norm = torch.linalg.norm(T).item()
     opts, bound = _opts(kind, tol, norm)
-    assert_within(_error(T, hiepy.to_htt(T, opts)), bound, scale=norm, scale_label="‖T‖", dtypes=(T.dtype,))
+    assert_within(_error(T, hiepy.to_htt(T, opts)), bound, size=norm, size_label="‖T‖", dtypes=(T.dtype,))
 
 
 @given(pair=ht_pairs(), data=st.data())
@@ -96,8 +96,8 @@ def test_ele_mul_meets_tolerance(pair: tuple[HTTensor, HTTensor], data: st.DataO
     P = x.full() * y.full()
     atol = tol * torch.linalg.norm(P).item()
     result = hiepy.ele_mul(x, y, {"atol": atol})
-    scale = size(abs_full(x) * abs_full(y))
-    assert_within(_error(P, result), atol, scale=scale, dtypes=(x.dtype,))
+    size = frobenius(x) * frobenius(y)
+    assert_within(_error(P, result), atol, size=size, size_label="‖x‖·‖y‖", dtypes=(x.dtype,))
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~ N5: error vs. discarded singular values ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -116,7 +116,7 @@ def test_error_bounded_by_discarded_singular_values(name: str, x: HTTensor, data
         opts, _ = _opts("rtol", data.draw(_tols(accuracy, x.dtype), label="tol"), 0.0)
     result, discarded = truncate(x, opts)
     bound = math.sqrt(sum((s**2).sum().item() for s in discarded.values()))
-    assert_within(_error(X, result), bound, scale=size(abs_full(x)), accuracy=accuracy, dtypes=(x.dtype,))
+    assert_within(_error(X, result), bound, size=frobenius(x), accuracy=accuracy, dtypes=(x.dtype,))
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~ N6: rank cap ~~~~~~~~~~~~~~~~~~~~~~~~~

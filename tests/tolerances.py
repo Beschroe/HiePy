@@ -1,54 +1,51 @@
 """Error model of the test suite: every numerical check of ``tests/INVARIANTS.md`` goes through this module.
 
-A check has the form
+The model follows the LAPACK test suite. Each check computes a *test ratio*
 
-    error ≤ bound + rel · scale
+    ratio = (error − bound) / (ε · size of the inputs)
 
+and requires ``ratio ≤ THRESH``:
+
+- ``error`` is the measured deviation, e.g. ``‖result.full() − reference‖``,
 - ``bound`` is the mathematical bound of the property (0 for exact operations, ``atol + rtol·‖x‖`` for a
   truncation, ``sqrt(Σσ²)`` for discarded singular values),
-- ``rel`` is the relative rounding error, determined by the ``Accuracy`` class of the computed quantities and the
-  machine epsilon ``ε`` of the least precise dtype involved,
-- ``scale`` is the size of the computation: the same computation carried out with the absolute values of all
-  components and arguments (``abs_full``, ``abs_arg``). This is the textbook bound for rounding,
-  ``|fl(Σ aᵢbᵢ) − Σ aᵢbᵢ| ≤ γ·Σ|aᵢ||bᵢ|``; it captures cancellation in the operation and in the representation.
+- ``ε`` is the machine epsilon of the least precise dtype involved,
+- the *size of the inputs* is the largest norm the result can have by the usual norm inequalities, e.g. ``‖x‖`` for
+  unary operations, ``‖x‖ + ‖y‖`` for ``x − y`` (``tests.ops.Op.input_size``). Measuring against the inputs rather
+  than the result keeps the check meaningful when the result is small through cancellation.
 
-The only tuning knob is ``SAFETY``. A failing check reports all three parts, so it is visible which part of the
-model is too tight.
+A test therefore detects every deviation larger than ``THRESH · ε`` times the size of the inputs. Singular values
+computed from Gramian eigenvalues (``truncate_gram``) are only accurate to ``sqrt(ε)`` times the size of the inputs;
+for them the margin is ``sqrt(ε) · size`` (``Accuracy.GRAMIAN``). A failing check reports the ratio and its parts.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from enum import Enum
 
 import torch
 
 from hiepy import HTTensor
 
-# Safety factor on the machine epsilon; 45 · ε(float64) ≈ 1e-14.
-SAFETY = 45
+# Largest admissible test ratio. LAPACK uses 30; the measured maximum on the inputs of tests/strategies.py is 163
+# (rank-deficient representations by design), so 1000 leaves about 6x room (INVARIANTS.md, Q12).
+THRESH = 1000
 
 
 class Accuracy(Enum):
-    """How accurately a quantity can be computed, relative to the scale of the inputs."""
+    """How accurately a quantity can be computed, relative to the size of the inputs."""
 
     ROUNDING = "rounding"
-    """Direct computation (products, QR, SVD): relative error ``SAFETY · ε``."""
+    """Direct computation (products, QR, SVD): margin ``THRESH · ε · size``."""
 
     GRAMIAN = "gramian"
     """Singular values as square roots of Gramian eigenvalues (``truncate_gram``): an eigenvalue is accurate to
-    ``ε·‖x‖²``, so its square root only to ``sqrt(ε)·‖x‖``."""
+    ``ε·‖x‖²``, so its square root only to ``sqrt(ε)·‖x‖``; margin ``sqrt(ε) · size``."""
 
 
 def machine_eps(*dtypes: torch.dtype) -> float:
     """Machine epsilon of the least precise of ``dtypes``."""
     return max(torch.finfo(dtype).eps for dtype in dtypes)
-
-
-def relative_error(accuracy: Accuracy, *dtypes: torch.dtype) -> float:
-    """Relative rounding error of a quantity of the given accuracy class, computed in ``dtypes``."""
-    eps = machine_eps(*dtypes)
-    return SAFETY * eps if accuracy is Accuracy.ROUNDING else eps**0.5
 
 
 def resolution(accuracy: Accuracy, *dtypes: torch.dtype) -> float:
@@ -58,100 +55,72 @@ def resolution(accuracy: Accuracy, *dtypes: torch.dtype) -> float:
     return 0.0 if accuracy is Accuracy.ROUNDING else machine_eps(*dtypes) ** 0.5
 
 
-def abs_full(x: HTTensor) -> torch.Tensor:
-    """Dense float64 tensor reconstructed from the absolute values of all components of ``x``.
-
-    Rounding in any computation with ``x`` is bounded by the same computation on ``abs_full(x)`` (times a small
-    multiple of ε); ``‖abs_full(x)‖ ≥ ‖x‖``, with equality if no cancellation occurs in the representation.
-    """
-    U = {t: u.detach().abs().double() for t, u in x.U.items()}
-    B = {t: b.detach().abs().double() for t, b in x.B.items()}
-    return HTTensor(U=U, B=B, dtree=x.dtree).full()
+def frobenius(t: HTTensor | torch.Tensor) -> float:
+    """Frobenius norm of a dense tensor or of the dense form of an HT tensor (in float64)."""
+    dense = t.full() if isinstance(t, HTTensor) else t
+    return torch.linalg.norm(dense.detach().double()).item()
 
 
-def abs_arg(arg: object) -> object:
-    """Absolute value of the numbers in an operation argument (tensors as float64, Python floats); indices, keys,
-    dtypes and other objects are returned unchanged. Tuples are processed entrywise."""
-    if isinstance(arg, torch.Tensor):
-        return arg.detach().abs().double()
-    if isinstance(arg, float):
-        return abs(arg)
-    if isinstance(arg, tuple):
-        return tuple(abs_arg(a) for a in arg)
-    return arg
-
-
-def size(T: torch.Tensor) -> float:
-    """Norm of the result of an absolute-value computation (absolute value for a scalar)."""
-    return torch.linalg.norm(T.double()).item()
-
-
-@dataclass(frozen=True)
-class Bound:
-    """``bound + rel · scale``, with labels that explain each part in a failure message."""
-
-    bound: float
-    rel: float
-    scale: float
-    rel_label: str
-    scale_label: str
-
-    @property
-    def total(self) -> float:
-        return self.bound + self.rel * self.scale
-
-    def check(self, error: float, what: str = "error") -> None:
-        """Assert ``error ≤ total`` and explain the bound otherwise."""
-        assert error <= self.total, (
-            f"{what} {error:.4e} > {self.total:.4e} = bound {self.bound:.4e} "
-            f"+ rel {self.rel:.2e} [{self.rel_label}] · scale {self.scale:.4e} [{self.scale_label}]"
-        )
-
-
-def _rel_label(accuracy: Accuracy, dtypes: tuple[torch.dtype, ...]) -> str:
+def _check(
+    error: float,
+    bound: float,
+    size: float,
+    size_label: str,
+    accuracy: Accuracy,
+    dtypes: tuple[torch.dtype, ...],
+    what: str,
+) -> None:
+    """Assert ``(error − bound) / (ε · size) ≤ limit`` and report the ratio and its parts otherwise."""
+    eps = machine_eps(*dtypes)
+    limit = THRESH if accuracy is Accuracy.ROUNDING else eps**-0.5
+    if error <= bound + limit * eps * size:
+        return
     name = str(min(dtypes, key=lambda d: torch.finfo(d).bits)).removeprefix("torch.")
-    return f"{SAFETY}·ε({name})" if accuracy is Accuracy.ROUNDING else f"sqrt(ε({name}))"
+    ratio = (error - bound) / (eps * size) if size > 0 else float("inf")
+    limit_label = f"THRESH {THRESH}" if accuracy is Accuracy.ROUNDING else f"1/sqrt(ε) {limit:.1e} (Gramian)"
+    raise AssertionError(
+        f"{what}: test ratio {ratio:.3g} > {limit_label}; ratio = (error {error:.4e} − bound {bound:.4e}) "
+        f"/ (ε({name}) {eps:.2e} · {size_label} {size:.4e})"
+    )
 
 
 def assert_exact(
     actual: torch.Tensor,
     expected: torch.Tensor,
     *,
-    scale: float | None = None,
-    scale_label: str = "|·| computation",
+    size: float | None = None,
+    size_label: str = "size of inputs",
     dtypes: tuple[torch.dtype, ...] | None = None,
 ) -> None:
-    """Exact operations: ``‖actual − expected‖ ≤ SAFETY · ε · scale``.
+    """Exact operations: ``‖actual − expected‖ / (ε · size) ≤ THRESH``.
 
-    ``scale`` is the size of the computation with absolute values (default: ``‖expected‖``, sufficient when the
-    computation has no cancellation); ``dtypes`` are the precisions involved (default: those of ``actual`` and
+    ``size`` is the size of the inputs (default: ``‖expected‖``, for operations that do not change the size, such
+    as copies and round trips); ``dtypes`` are the precisions involved (default: those of ``actual`` and
     ``expected``).
     """
     assert actual.shape == expected.shape, f"shape {tuple(actual.shape)} != {tuple(expected.shape)}"
     dtypes = dtypes or (actual.dtype, expected.dtype)
     error = torch.linalg.norm(actual.double() - expected.double()).item()
-    if scale is None:
-        scale, scale_label = size(expected), "‖expected‖"
-    rel = relative_error(Accuracy.ROUNDING, *dtypes)
-    Bound(0.0, rel, scale, _rel_label(Accuracy.ROUNDING, dtypes), scale_label).check(error)
+    if size is None:
+        size, size_label = frobenius(expected), "‖expected‖"
+    _check(error, 0.0, size, size_label, Accuracy.ROUNDING, dtypes, "deviation")
 
 
 def assert_within(
     error: float,
     bound: float,
     *,
-    scale: float,
-    scale_label: str = "|·| computation",
+    size: float,
+    size_label: str = "‖x‖",
     accuracy: Accuracy = Accuracy.ROUNDING,
     dtypes: tuple[torch.dtype, ...] = (torch.float64,),
 ) -> None:
-    """Approximations: ``error ≤ bound + rel(accuracy, dtypes) · scale``."""
-    rel = relative_error(accuracy, *dtypes)
-    Bound(bound, rel, scale, _rel_label(accuracy, dtypes), scale_label).check(error)
+    """Approximations: ``(error − bound) / (ε · size) ≤ THRESH`` (Gramian accuracy: margin ``sqrt(ε) · size``)."""
+    _check(error, bound, size, size_label, accuracy, dtypes, "error beyond bound")
 
 
 def assert_orthonormal(F: torch.Tensor, what: str = "frame", dtypes: tuple[torch.dtype, ...] | None = None) -> None:
-    """``‖FᵀF − I‖_F ≤ SAFETY · ε · k`` for a matrix with ``k`` columns (the deviation grows with ``k``).
+    """``‖FᵀF − I‖_F / (k · ε) ≤ THRESH`` for a matrix with ``k`` columns, as in LAPACK's orthogonality tests.
 
     ``dtypes`` are the precisions ``F`` was computed in (default: its own dtype), e.g. float32 for a float32 frame
     converted to float64.
@@ -159,7 +128,4 @@ def assert_orthonormal(F: torch.Tensor, what: str = "frame", dtypes: tuple[torch
     dtypes = dtypes or (F.dtype,)
     k = F.shape[1]
     deviation = torch.linalg.norm(F.T @ F - torch.eye(k, dtype=F.dtype, device=F.device)).item()
-    rel = relative_error(Accuracy.ROUNDING, *dtypes)
-    Bound(0.0, rel, float(k), _rel_label(Accuracy.ROUNDING, dtypes), "columns k").check(
-        deviation, f"‖FᵀF − I‖ of {what}"
-    )
+    _check(deviation, 0.0, float(k), "columns k", Accuracy.ROUNDING, dtypes, f"‖FᵀF − I‖ of {what}")
