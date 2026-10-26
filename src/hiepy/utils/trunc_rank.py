@@ -53,14 +53,25 @@ def trunc_rank(
     int
         Selected truncation rank.
 
+    Raises
+    ------
+    ValueError
+        If a singular value is not finite. This happens when the squared singular values overflow, i.e. for tensors
+        with norm beyond about $10^{154}$ in float64.
+
     Warns
     -----
     UserWarning
         If the computed rank exceeds ```max_rank```. In this case, ```max_rank``` is
         returned and error tolerances may not be satisfied.
     """
-    # compute strict thresh
+    # compute strict thresh; non-finite values mean that squared singular values overflowed
     norm_s = torch.linalg.norm(singular_values, ord=2)
+    if not (torch.isfinite(singular_values).all() and torch.isfinite(norm_s)):
+        raise ValueError(
+            "Singular values are not finite; the tensor is outside the supported range (norm up to about 1e154 in "
+            "float64, beyond which squared singular values overflow)."
+        )
     tol = atol + rtol * norm_s
 
     # compute truncation errors

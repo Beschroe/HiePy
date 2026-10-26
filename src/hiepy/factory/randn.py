@@ -8,6 +8,7 @@ from __future__ import annotations
 import torch
 
 from hiepy.httensor.httensor import HTTensor as HTTensor
+from hiepy.utils.checks import check_shape
 from hiepy.linalg.matricize import dematricize
 from hiepy.utils.data_types import Shape, TensorDict
 from hiepy.utils.dimtree import DimTree
@@ -48,6 +49,11 @@ def randn(
     HTTensor
         A randomly initialized orthogonal HT tensor of shape ``shape``.
 
+    Raises
+    ------
+    ValueError
+        If a mode of ``shape`` has size 0 or ``rank < 1``.
+
     Notes
     -----
     - The output tensor is orthogonal by construction.
@@ -76,6 +82,9 @@ def randn(
             [[ 0.2644,  0.5182],
              [ 0.5994, -0.5537]]])
     """
+    check_shape(shape)
+    if rank < 1:
+        raise ValueError(f"Argument 'rank' must be at least 1, got {rank}.")
     order = len(shape)
     dtree = DimTree.from_order(order)
 

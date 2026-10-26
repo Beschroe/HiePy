@@ -59,7 +59,7 @@ def get(x: HTTensor, key: IndexKey | tuple[IndexKey, ...]) -> HTTensor | torch.T
         If an index is out of bounds or ``key`` has more entries than ``x`` has modes.
 
     ValueError
-        If a slice step is not positive.
+        If a slice step is not positive or a slice selects no entry (HT tensors have no empty modes).
 
     Notes
     -----
@@ -152,7 +152,7 @@ def _normalize_key(key: IndexKey | tuple[IndexKey, ...], shape: Shape) -> list[i
         If ``key`` has more entries than ``shape`` or an integer index is out of bounds.
 
     ValueError
-        If a slice step is not positive.
+        If a slice step is not positive or a slice selects no entry (HT tensors have no empty modes).
     """
     entries = key if isinstance(key, tuple) else (key,)
     if len(entries) > len(shape):
@@ -163,6 +163,11 @@ def _normalize_key(key: IndexKey | tuple[IndexKey, ...], shape: Shape) -> list[i
         if isinstance(entry, slice):
             if entry.step is not None and _as_index(entry.step) <= 0:
                 raise ValueError(f"Slice step must be positive, got {entry.step} for dimension {dim}.")
+            if len(range(*entry.indices(shape[dim]))) == 0:
+                raise ValueError(
+                    f"Slice {entry} selects no entry of dimension {dim} with size {shape[dim]}; "
+                    "HT tensors have no empty modes."
+                )
             normalized.append(entry)
             continue
 

@@ -9,6 +9,7 @@ from __future__ import annotations
 import torch
 
 from hiepy.httensor.httensor import HTTensor as HTTensor
+from hiepy.utils.checks import check_shape
 from hiepy.utils.data_types import Shape
 from hiepy.utils.dimtree import DimTree
 
@@ -49,6 +50,11 @@ def ones(
     HTTensor
         Hierarchical Tucker tensor of shape ``shape`` with all entries equal to one.
 
+    Raises
+    ------
+    ValueError
+        If a mode of ``shape`` has size 0.
+
     Notes
     -----
     - The output is represented exactly in HT format.
@@ -75,6 +81,7 @@ def ones(
     >>> x.is_orthog
     True
     """
+    check_shape(shape)
     dtype = torch.get_default_dtype() if dtype is None else dtype
 
     # Create leaf matrices and transfer tensors

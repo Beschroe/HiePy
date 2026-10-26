@@ -43,7 +43,7 @@ def mode_mul(x: HTTensor, A: torch.Tensor, dim: int) -> HTTensor:
     Raises
     ------
     ValueError
-        If ``A`` is not two-dimensional.
+        If ``A`` is not two-dimensional or has no rows (HT tensors have no empty modes).
 
     ValueError
         If ``dim`` is outside the valid mode range.
@@ -81,6 +81,8 @@ def mode_mul(x: HTTensor, A: torch.Tensor, dim: int) -> HTTensor:
     """
     if len(A.shape) != 2:
         raise ValueError(f"Argument 'A' must be a 2D torch.Tensor, got shape {A.shape}")
+    if A.shape[0] < 1:
+        raise ValueError(f"Argument 'A' must have at least one row, got shape {tuple(A.shape)}")
     if dim < 0 or dim >= x.order:
         raise ValueError(f"Argument 'dim' is out of range for this HTTensor (dim={dim}, order={x.order})")
     if x.shape[dim] != A.shape[1]:

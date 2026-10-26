@@ -103,9 +103,12 @@ Rules from CLAUDE.md ("Autograd"), covered by `tests/test_autograd.py`.
 | E3 | `gramians` raises `ValueError` if `is_orthog` is `False`. |
 | E4 | `HTTensor(...)` raises `TypeError` for mixed dtypes and `RuntimeError` for mixed devices. |
 | E5 | `save`/`load` raise `ValueError` for paths without `.htt`; `load` raises `TypeError` if the file holds no `HTTensor`. |
-| E6 | `get` raises like torch: `IndexError` (out of bounds, too many indices), `TypeError` (unsupported key), `ValueError` (non-positive step). |
+| E6 | `get` raises like torch: `IndexError` (out of bounds, too many indices), `TypeError` (unsupported key), `ValueError` (non-positive step, slice selecting no entry). |
 | E7 | `to_htt` raises `ValueError` for inputs of order < 2. |
 | E8 | `ele_mul` ignores `rtol` with a `UserWarning`. |
+| E9 | `to_htt`, `truncate_svd`, `truncate_gram`, `ele_mul` (and `truncate`) validate their options: unknown keys, `atol`/`rtol` negative or not finite, or `max_rank < 1` raise `ValueError`; a non-numeric tolerance or non-int `max_rank` raises `TypeError` (Q10). |
+| E10 | No empty modes or ranks: factories and `to_htt` with a mode of size 0, `randn` with `rank < 1`, `hilbert` with `M < 1` and `mode_mul` with a matrix without rows raise `ValueError` (Q10). |
+| E11 | Outside the supported range (norms beyond about `1e154` in float64), the truncating routines raise `ValueError` instead of failing in `torch.linalg` or returning a meaningless result; `norm` returns `inf` like `torch.linalg.norm` (Q11). |
 
 ## Decisions
 
@@ -149,3 +152,13 @@ Rules from CLAUDE.md ("Autograd"), covered by `tests/test_autograd.py`.
   `to_htt` produced deviations up to `1.5e-14` for frames with `k = 80` columns; `orthog` stays below `2e-15`). The
   precision is that of the least precise dtype involved, so float32 data converted to float64 is compared at float32
   accuracy.
+- **Q10 – Argument validation (E6, E9, E10).** Invalid arguments raise a clear error at the entry of an operation
+  instead of being accepted silently or failing later: a misspelled option such as `{"tol": 1e-3}` used to be
+  ignored (no truncation), negative or `nan` tolerances failed with `IndexError` inside `trunc_rank`, and
+  `max_rank = 0`, `randn(rank=0)` or a zero-row matrix in `mode_mul` produced components of rank or size 0. HT tensors
+  have no empty modes and no rank 0, consistent with the decision to reject empty slices in `get`.
+- **Q11 – Supported range (E11).** Squared singular values and Gram matrices overflow for norms beyond about `1e154`
+  in float64. The truncating routines check for non-finite singular values (`trunc_rank`) and Gram matrices
+  (`left_svd_gramian`) and raise `ValueError` naming the range; before, they failed with `IndexError` or
+  `LinAlgError`, or returned a result truncated against a `nan` tolerance. The range is documented in the
+  docstrings; scaling the computations internally to support the full float64 range was not pursued.

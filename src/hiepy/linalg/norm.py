@@ -24,6 +24,12 @@ def norm(x: HTTensor) -> torch.Tensor:
     torch.Tensor
         A 0-dimensional tensor (scalar) representing the Frobenius norm of ``x``.
 
+    Notes
+    -----
+    - The norm is read off the root transfer tensor of the orthogonalized tensor via ``torch.linalg.norm``. Like
+      that function, it overflows to ``inf`` for norms beyond about $10^{154}$ in float64, the supported range of
+      hiepy (truncation routines raise ``ValueError`` there).
+
     Examples
     --------
     >>> import hiepy

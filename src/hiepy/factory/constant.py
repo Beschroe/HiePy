@@ -10,6 +10,7 @@ from __future__ import annotations
 import torch
 
 from hiepy.httensor.httensor import HTTensor as HTTensor
+from hiepy.utils.checks import check_shape
 from hiepy.utils.data_types import ScalarType, Shape
 from hiepy.utils.dimtree import DimTree
 
@@ -53,6 +54,11 @@ def constant(
     HTTensor
         HT tensor of shape ``shape`` whose entries are identically equal to ``c``.
 
+    Raises
+    ------
+    ValueError
+        If a mode of ``shape`` has size 0.
+
     Notes
     -----
     - The output tensor is represented exactly in HT format.
@@ -76,6 +82,7 @@ def constant(
             [[3.1400, 3.1400],
              [3.1400, 3.1400]]])
     """
+    check_shape(shape)
     dtype = torch.get_default_dtype() if dtype is None else dtype
 
     # (Cast c to a tensor with the requested dtype and device)

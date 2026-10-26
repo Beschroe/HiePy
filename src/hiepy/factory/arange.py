@@ -11,6 +11,7 @@ from math import prod
 import torch
 
 from hiepy.httensor.httensor import HTTensor as HTTensor
+from hiepy.utils.checks import check_shape
 from hiepy.utils.data_types import Shape
 from hiepy.utils.dimtree import DimTree
 
@@ -47,6 +48,11 @@ def arange(
     HTTensor
         New HT tensor of shape ``shape`` containing the values ``0, 1, ..., prod(shape) - 1``.
 
+    Raises
+    ------
+    ValueError
+        If a mode of ``shape`` has size 0.
+
     Notes
     -----
     - The tensor is represented exactly in HT format.
@@ -68,6 +74,7 @@ def arange(
             [[4., 5.],
              [6., 7.]]])
     """
+    check_shape(shape)
     dtype = torch.get_default_dtype() if dtype is None else dtype
 
     # Init dtree

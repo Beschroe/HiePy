@@ -15,6 +15,7 @@ from hiepy.linalg.left_svd_gramian import left_svd_gramian
 from hiepy.linalg.matricize import matricize
 from hiepy.linalg.mode_mul_torch import mode_mul_torch
 from hiepy.transformation.orthog import orthog
+from hiepy.utils.checks import check_trunc_opts
 from hiepy.utils.data_types import TruncOpts
 from hiepy.utils.dimtree import Node
 from hiepy.utils.trunc_rank import trunc_rank
@@ -53,7 +54,9 @@ def truncate(x: HTTensor, opts: TruncOpts, method: str = "svd") -> tuple[HTTenso
     Raises
     ------
     ValueError
-        If an unsupported truncation method is specified.
+        If an unsupported truncation method is specified, or for invalid ``opts`` or overflow (see ``truncate_svd``).
+    TypeError
+        If a tolerance in ``opts`` is not a real number or ``max_rank`` is not an int.
 
     Notes
     -----
@@ -118,6 +121,14 @@ def truncate_gram(x: HTTensor, opts: TruncOpts) -> tuple[HTTensor, dict[Node, to
     tuple[HTTensor, dict[Node, torch.Tensor]]
         Truncated HT tensor approximating ``x`` and dict containing the nodewise singular values.
 
+    Raises
+    ------
+    ValueError
+        If ``opts`` contains an unknown key, a negative or non-finite tolerance or ``max_rank < 1``, or if the
+        singular values overflow (norm of ``x`` beyond about $10^{154}$ in float64).
+    TypeError
+        If a tolerance in ``opts`` is not a real number or ``max_rank`` is not an int.
+
     Notes
     -----
     - The output tensor approximates the input tensor in Frobenius norm.
@@ -137,6 +148,8 @@ def truncate_gram(x: HTTensor, opts: TruncOpts) -> tuple[HTTensor, dict[Node, to
       $\sqrt{\varepsilon}\,\lVert x \rVert$ ($\approx 10^{-8} \lVert x \rVert$ in float64) therefore cannot be
       resolved.
     """
+    check_trunc_opts(opts)
+
     # Adjust error tolerances in opts.
     # To guarantee a global error bound e, the local truncation error per node
     # must be bounded by e / sqrt(2 * order - 3).
@@ -222,6 +235,14 @@ def truncate_svd(x: HTTensor, opts: TruncOpts) -> tuple[HTTensor, dict[Node, tor
     tuple[HTTensor, dict[Node, torch.Tensor]]
         Truncated HT tensor approximating ``x`` and dict containing the nodewise singular values.
 
+    Raises
+    ------
+    ValueError
+        If ``opts`` contains an unknown key, a negative or non-finite tolerance or ``max_rank < 1``, or if the
+        singular values overflow (norm of ``x`` beyond about $10^{154}$ in float64).
+    TypeError
+        If a tolerance in ``opts`` is not a real number or ``max_rank`` is not an int.
+
     Notes
     -----
     - The output tensor approximates the input tensor in Frobenius norm.
@@ -248,6 +269,8 @@ def truncate_svd(x: HTTensor, opts: TruncOpts) -> tuple[HTTensor, dict[Node, tor
           leaf matrices and transfer tensors to update the HT representation.
 
     """
+    check_trunc_opts(opts)
+
     # Adjust error tolerances in opts.
     # To guarantee a global error bound e, the local truncation error per node
     # must be bounded by e / sqrt(2 * order - 3).

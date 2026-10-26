@@ -11,6 +11,7 @@ import torch
 from hiepy.httensor.httensor import HTTensor as HTTensor
 from hiepy.linalg.matricize import dematricize, matricize
 from hiepy.linalg.mode_mul_torch import mode_mul_torch
+from hiepy.utils.checks import check_shape, check_trunc_opts
 from hiepy.utils.data_types import TruncOpts
 from hiepy.utils.dimtree import DimTree
 from hiepy.utils.trunc_rank import trunc_rank
@@ -45,7 +46,11 @@ def to_htt(x: torch.Tensor, opts: TruncOpts) -> HTTensor:
     Raises
     ------
     ValueError
-        If the input tensor ``x`` has fewer than 2 dimensions.
+        If the input tensor ``x`` has fewer than 2 dimensions or a mode of size 0, if ``opts`` contains an unknown
+        key, a negative or non-finite tolerance or ``max_rank < 1``, or if the singular values overflow (norm of
+        ``x`` beyond about $10^{154}$ in float64).
+    TypeError
+        If a tolerance in ``opts`` is not a real number or ``max_rank`` is not an int.
 
     Notes
     -----
@@ -73,6 +78,8 @@ def to_htt(x: torch.Tensor, opts: TruncOpts) -> HTTensor:
     # validity checks
     if x.dim() < 2:
         raise ValueError(f"Argument 'x' must be a ND torch.Tensor with N>=2, got shape {x.shape}")
+    check_shape(tuple(x.shape))
+    check_trunc_opts(opts)
 
     # Adjust local error tolerances to meet the global error bound
     adjusted_opts: TruncOpts = {}
