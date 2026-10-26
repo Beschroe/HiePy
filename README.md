@@ -6,7 +6,7 @@ and computation grow linearly instead of exponentially with the number of modes.
 
 **Documentation:** <https://beschroe.github.io/HiePy/>
 
-> Status: alpha. The API may still change.
+> Status: alpha. The API may still change; see the [changelog](https://github.com/Beschroe/HiePy/blob/main/CHANGELOG.md).
 
 ## Features
 
@@ -23,7 +23,7 @@ and computation grow linearly instead of exponentially with the number of modes.
 Requires Python 3.12 and PyTorch 2.6 or newer.
 
 ```bash
-pip install git+https://github.com/Beschroe/HiePy
+pip install hiepy
 ```
 
 ## Quickstart
@@ -48,4 +48,4 @@ Next: [Getting started](https://beschroe.github.io/HiePy/getting-started/),
 
 ## License
 
-[EUPL-1.2](LICENSE)
+[EUPL-1.2](https://github.com/Beschroe/HiePy/blob/main/LICENSE)

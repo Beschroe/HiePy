@@ -20,6 +20,8 @@ Key Features
 - Random tensor generation in HT format
 """
 
+from importlib.metadata import version as _version
+
 from .algebra.add import add
 from .algebra.contract import contract
 from .algebra.ele_mode_mul import ele_mode_mul
@@ -54,7 +56,11 @@ from .utils.data_types import ScalarType, Shape, TensorDict, TruncOpts
 from .utils.dimtree import DimTree, Node
 from .utils.trunc_rank import trunc_rank
 
+# Version of the installed package, from the single source in pyproject.toml
+__version__ = _version("hiepy")
+
 __all__ = [
+    "__version__",
     "nbytes",
     "dtype",
     "device",
