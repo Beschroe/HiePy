@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "hiepy"
 # The single source of the version; hiepy.__version__ reads it from the installed metadata. See CHANGELOG.md.
-version = "0.1.0"
+version = "0.1.0rc1"
 description = "A comprehensive PyTorch framework for Hierarchical Tucker tensors."
 readme = "README.md"
 requires-python = "==3.12.*"
