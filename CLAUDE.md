@@ -184,7 +184,7 @@ docstrings referenced in the functionality map below.
 
 ### Code style and tooling
 
-- Python 3.12 only (`requires-python = "==3.12.*"`; uses `type X = ...` aliases and `typing.Self`). Only runtime dependency: `torch`.
+- Python 3.12 only (`requires-python = "==3.12.*"`; uses `type X = ...` aliases and `typing.Self`). Runtime dependencies: `torch` and `numpy` (hiepy itself does not use numpy, but torch warns on import without it).
 - Ruff: line length 120, rule sets `E`, `F`, `ANN` (type annotations required, also in tests).
   Config in `pyproject.toml`.
 - Docstrings: NumPy style with LaTeX math (`$...$`, `$$...$$`) rendered by MkDocs/arithmatex,
