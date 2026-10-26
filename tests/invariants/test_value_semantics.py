@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import pytest
+import torch
 from hypothesis import given
 from hypothesis import strategies as st
 
+import hiepy
 from hiepy import HTTensor
 from tests.helpers import assert_unchanged, snapshot, storages
 from tests.ops import OPS, ht_result
-from tests.strategies import ht_pairs
+from tests.strategies import decaying_dense, ht_pairs
 
 
 @pytest.mark.parametrize("name", OPS)
@@ -39,3 +41,12 @@ def test_result_shares_nothing_with_inputs(name: str, pair: tuple[HTTensor, HTTe
     for operand in (x, y):
         assert not storages(result) & storages(operand)
         assert result.dtree is not operand.dtree
+
+
+@given(T=decaying_dense())
+def test_to_htt_does_not_modify_or_share_its_input(T: torch.Tensor):
+    """V1, V2: ``to_htt`` leaves the dense input unchanged and shares no storage with it."""
+    before = T.clone()
+    x = hiepy.to_htt(T, {"rtol": 1e-6})
+    assert torch.equal(T, before)
+    assert T.untyped_storage().data_ptr() not in storages(x)
