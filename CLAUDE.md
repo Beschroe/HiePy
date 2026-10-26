@@ -56,7 +56,6 @@ src/hiepy/
 Related top-level locations:
 
 - `tests/` — pytest suite, organized around the invariant catalog (see "Tests" below).
-- `test.ipynb` (repo root) — exploratory notebook, not a test.
 - `docs/` + `mkdocs.yml` — MkDocs (material + mkdocstrings, NumPy docstring style): Home (`index.md`),
   `getting-started.md`, User Guide (`user-guide/`: HT format, operations, truncation, practical notes) and the API
   reference. The pages in `docs/api/*.md` list the documented members **explicitly** (`::: hiepy.<name>`);
