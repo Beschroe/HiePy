@@ -9,6 +9,8 @@ in [Decisions](#decisions).
 - **Operation**: a public function returning an `HTTensor` (for `truncate*`: the first entry of the returned tuple),
   together with the `HTTensor` methods and operators that wrap it.
 - **Frame of node t**: `U[t]` for a leaf, otherwise $(U_{t_l} \otimes U_{t_r}) \cdot \mathrm{mat}(B_t)$.
+- **Inputs**: the strategies in `tests/strategies.py` draw float32 and float64 tensors (pairs share one dtype;
+  mixed precisions are covered by D2).
 - **Error model** (`tests/tolerances.py`, Q9): every numerical check has the form
   `error ≤ bound + rel · scale`.
   - `bound`: the mathematical bound of the invariant (0 for exact results).
@@ -58,7 +60,7 @@ A wrong `True` silently breaks `norm` and `gramians`; a wrong `False` only costs
 | N1 | `result.full()` equals the dense counterpart of the operation applied to `x.full()`. | `add`, `sub`, `scalar_mul`, `mode_mul`, `ele_mode_mul`, `ele_mul` without `opts`, `orthog`, `squeeze`, `get`, `copy`, `clone`, `detach`, `to` (in the target precision); `zeros`, `ones`, `constant`, `arange` |
 | N2 | `contract(x, y)` equals `(x.full() * y.full()).sum()`; `norm(x)` equals `torch.linalg.norm(x.full())`. | `contract`, `norm` |
 | N3 | Round trips are exact: `to_htt(T, {"atol": 0}).full() ≈ T`; `load(save(x))` reproduces components, `dtree` and `is_orthog`; `dematricize ∘ matricize` and `devectorize ∘ vectorize` are the identity. | `to_htt`, `save`/`load`, `matricize`, `vectorize` |
-| N4 | **Error vs. tolerance**: `‖x.full() − result.full()‖ ≤ atol + rtol · ‖x‖` (a missing key counts as 0) if no `max_rank` is given, up to rounding of order `m(x)` (Conventions, Q5). Tested down to `atol = 1e-12·‖x‖` and `rtol = 1e-12`; `truncate_gram` and `ele_mul` only down to `1e-8` (Q4). | `to_htt`, `truncate_svd`, `truncate_gram`, `ele_mul` (`atol` only, E8, Q6) |
+| N4 | **Error vs. tolerance**: `‖x.full() − result.full()‖ ≤ atol + rtol · ‖x‖` (a missing key counts as 0) if no `max_rank` is given, up to rounding of order `m(x)` (Conventions, Q5). Tested down to `atol = 1e-12·‖x‖` and `rtol = 1e-12`; `truncate_gram` and `ele_mul` only down to their resolution `sqrt(ε)` (`1e-8` in float64, `3.5e-4` in float32; Q4). | `to_htt`, `truncate_svd`, `truncate_gram`, `ele_mul` (`atol` only, E8, Q6) |
 | N5 | **Error vs. discarded singular values**: `‖x.full() − result.full()‖ ≤ sqrt(Σ_t ‖σ_t‖²)`, where `σ_t` are the returned discarded singular values, up to rounding of order `m(x)` in the accuracy class of the `σ_t` (Gramian for `truncate_gram`, Q5). Also with `max_rank`; same tolerance range as N4. | `truncate_svd`, `truncate_gram` |
 | N6 | `rank[t] ≤ max_rank` for every non-root node. | `to_htt`, `truncate_svd`, `truncate_gram`, `ele_mul` |
 | N7 | `orthog` does not increase any rank. | `orthog` |
@@ -121,9 +123,9 @@ Rules from CLAUDE.md ("Autograd"), covered by `tests/test_autograd.py`.
   node with the norm of the node's singular values, which equals `‖x‖` for an orthogonalized tensor.
 - **Q4 – Gramian-based truncation (N4, N5).** `truncate_gram` is Grasedyck's hierarchical SVD (SIAM J. Matrix Anal.
   Appl. 31(4), 2010, Thm. 3.11), so the bounds hold in exact arithmetic. It computes `σ²` as eigenvalues of
-  `X_t X_tᵀ`, so singular values below about `sqrt(ε)·‖x‖ ≈ 1e-8·‖x‖` cannot be resolved (stated in its
-  docstring). Hence `truncate_gram` and `ele_mul`, which also selects ranks from Gramians, are tested only down to
-  `1e-8`.
+  `X_t X_tᵀ`, so singular values below about `sqrt(ε)·‖x‖` (`1e-8·‖x‖` in float64, `3.5e-4·‖x‖` in float32) cannot
+  be resolved (stated in its docstring). Hence `truncate_gram` and `ele_mul`, which also selects ranks from
+  Gramians, are tested only down to this resolution of the precision of the data (`tests/tolerances.py::resolution`).
 - **Q5 – Rounding margin in N4 and N5.** A margin of `SAFETY·ε · m(x)` absorbs rounding: without it, N5 failed
   where nothing was truncated and both sides were at rounding level (`1e-15` vs. `2e-16`). It is measured in `m(x)`
   rather than `‖x‖` because representations with cancellation produce rounding errors of order `m(x)` (Q7); for

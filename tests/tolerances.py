@@ -49,6 +49,13 @@ def relative_error(accuracy: Accuracy, *dtypes: torch.dtype) -> float:
     return SAFETY * eps if accuracy is Accuracy.ROUNDING else eps**0.5
 
 
+def resolution(accuracy: Accuracy, *dtypes: torch.dtype) -> float:
+    """Smallest relative size a quantity of the given accuracy class can resolve: 0 for direct computations,
+    ``sqrt(ε)`` for singular values from Gramian eigenvalues (``truncate_gram``, ``ele_mul``; Q4). Truncation
+    tolerances below it are not tested for these routines."""
+    return 0.0 if accuracy is Accuracy.ROUNDING else machine_eps(*dtypes) ** 0.5
+
+
 def magnitude(x: HTTensor) -> float:
     """``m(x)``: product of the spectral norms of all components (transfer tensors matricized as ``(r_l r_r) x r_t``).
 

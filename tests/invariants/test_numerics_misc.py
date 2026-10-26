@@ -101,7 +101,7 @@ def test_local_left_svd_matches_dense_svd(x: HTTensor):
         if xo.dtree.is_root(t):
             continue  # the root frame is the tensor itself, not an orthonormal basis
         W = F @ U_loc
-        assert_within(torch.linalg.norm(X_t - W @ (W.T @ X_t)).item(), 0.0, scale=m)
+        assert_within(torch.linalg.norm(X_t - W @ (W.T @ X_t)).item(), 0.0, scale=m, dtypes=(x.dtype,))
 
 
 @given(x=ht_tensors())
