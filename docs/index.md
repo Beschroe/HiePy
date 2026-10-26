@@ -33,3 +33,8 @@ True
 - User Guide: [the HT format](user-guide/ht-format.md), [operations](user-guide/operations.md),
   [truncation](user-guide/truncation.md), [practical notes](user-guide/practical.md).
 - [API Reference](api/index.md): every function with parameters, guarantees and cost.
+
+## Reporting bugs
+
+Please report bugs as an [issue on GitHub](https://github.com/Beschroe/HiePy/issues/new/choose), with a small
+example that reproduces the problem.

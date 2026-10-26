@@ -46,6 +46,11 @@ Next: [Getting started](https://beschroe.github.io/HiePy/getting-started/),
 [User Guide](https://beschroe.github.io/HiePy/user-guide/ht-format/),
 [API Reference](https://beschroe.github.io/HiePy/api/).
 
+## Reporting bugs
+
+Please report bugs as an [issue on GitHub](https://github.com/Beschroe/HiePy/issues/new/choose), with a small
+example that reproduces the problem.
+
 ## License
 
 [EUPL-1.2](https://github.com/Beschroe/HiePy/blob/main/LICENSE)
