@@ -1,4 +1,4 @@
-# LinAlg 
+# Linear Algebra
 
 ::: hiepy.dematricize
 
@@ -17,12 +17,3 @@
 ::: hiepy.norm
 
 ::: hiepy.vectorize
-
-
-
-
-
-
-
-
-

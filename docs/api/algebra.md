@@ -1,4 +1,4 @@
-# Algebra 
+# Algebra
 
 ::: hiepy.add
 
@@ -9,9 +9,7 @@
 ::: hiepy.ele_mul
 
 ::: hiepy.mode_mul
-        
+
 ::: hiepy.scalar_mul
 
 ::: hiepy.sub
-
-

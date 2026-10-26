@@ -1,4 +1,4 @@
-# Factory 
+# Construction
 
 ::: hiepy.clone
 

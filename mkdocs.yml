@@ -65,13 +65,18 @@ markdown_extensions:
 
 nav:
   - Home: index.md
-
+  - Getting started: getting-started.md
+  - User Guide:
+      - The HT format: user-guide/ht-format.md
+      - Operations: user-guide/operations.md
+      - Truncation: user-guide/truncation.md
+      - Practical notes: user-guide/practical.md
   - API Reference:
       - Overview: api/index.md
-      - DimTree: api/dimtree.md
       - HTTensor: api/httensor.md
-      - Factory: api/factory.md
+      - DimTree: api/dimtree.md
+      - Construction: api/factory.md
       - Algebra: api/algebra.md
-      - Linear Algebra: api/linalg.md
       - Transformations: api/transformations.md
-      - Utils: api/utils.md
+      - Linear Algebra: api/linalg.md
+      - Utilities: api/utils.md
