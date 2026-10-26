@@ -1,0 +1,2 @@
+# Keep the source distribution to the package; the tests depend on the repository layout.
+prune tests

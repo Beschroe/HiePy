@@ -2,10 +2,10 @@
 
 ## Installation
 
-hiepy requires Python 3.12 and PyTorch 2.6 or newer. Install it from GitHub:
+hiepy requires Python 3.12 and PyTorch 2.6 or newer. Install it from PyPI:
 
 ```bash
-pip install git+https://github.com/Beschroe/HiePy
+pip install hiepy
 ```
 
 ## A first HT tensor

@@ -1,22 +1,29 @@
 [build-system]
-requires = ["setuptools>=61.0.0", "wheel"]
+# setuptools >= 77 for SPDX license expressions (PEP 639)
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "hiepy"
+# The single source of the version; hiepy.__version__ reads it from the installed metadata. See CHANGELOG.md.
 version = "0.1.0"
 description = "A comprehensive PyTorch framework for Hierarchical Tucker tensors."
 readme = "README.md"
 requires-python = "==3.12.*"
-license = { text = "EUPL 1.2" }
+license = "EUPL-1.2"
+license-files = ["LICENSE"]
+# Contact via the GitHub repository (see [project.urls])
 authors = [
-    { name = "Benedikt Schroeter", email = "b.schroeter@em.uni-frankfurt.de" }
+    { name = "Benedikt Schroeter" }
 ]
+keywords = ["tensor", "hierarchical tucker", "low-rank", "tensor decomposition", "pytorch"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
     "Topic :: Scientific/Engineering :: Mathematics",
+    "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
+    "Typing :: Typed",
 ]
 
 # Core dependencies required to run your library
@@ -41,12 +48,23 @@ docs = [
     "mkdocstrings[python]>=0.24.0",
     "pymdown-extensions>=10.0",   
 ]
+
+[project.urls]
+Documentation = "https://beschroe.github.io/HiePy/"
+Repository = "https://github.com/Beschroe/HiePy"
+Issues = "https://github.com/Beschroe/HiePy/issues"
+Changelog = "https://github.com/Beschroe/HiePy/blob/main/CHANGELOG.md"
+
 [tool.setuptools]
 package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["hiepy*"]
+
+[tool.setuptools.package-data]
+# PEP 561 marker: the package ships type annotations
+hiepy = ["py.typed"]
 
 [tool.ruff]
 # Target Python version and line-length

@@ -56,7 +56,6 @@ src/hiepy/
 Related top-level locations:
 
 - `tests/` — pytest suite, organized around the invariant catalog (see "Tests" below).
-- `test.ipynb` (repo root) — exploratory notebook, not a test.
 - `docs/` + `mkdocs.yml` — MkDocs (material + mkdocstrings, NumPy docstring style): Home (`index.md`),
   `getting-started.md`, User Guide (`user-guide/`: HT format, operations, truncation, practical notes) and the API
   reference. The pages in `docs/api/*.md` list the documented members **explicitly** (`::: hiepy.<name>`);
@@ -330,6 +329,17 @@ Useful when debugging or changing a core routine, because changes propagate:
 - Invariants every operation must satisfy, and the decisions behind them: `tests/INVARIANTS.md`.
 - Rendered API docs: `mkdocs serve` (needs the `docs` extra), navigation in `mkdocs.yml`.
 - Package metadata, extras and lint config: `pyproject.toml`.
+
+## Releases
+
+- Versioning: Semantic Versioning (PEP 440 spelling). Before 1.0, minor versions (`0.x.0`) may contain incompatible
+  changes, patch versions (`0.x.y`) only fixes; pre-releases are `0.x.0a1`, `b1`, `rc1`. A version on PyPI can never
+  be uploaded again.
+- The version lives only in `pyproject.toml`; `hiepy.__version__` reads it from the installed metadata. Every
+  release gets an entry in `CHANGELOG.md` (Keep a Changelog).
+- Publishing: `.github/workflows/release.yml` with PyPI Trusted Publishing. Publishing a GitHub release with tag
+  `vX.Y.Z` (must equal the version) uploads to PyPI; running the workflow manually uploads to TestPyPI.
+- The package contains only `src/hiepy` (with `py.typed`); `MANIFEST.in` keeps `tests/` out of the sdist.
 
 ## Commands
 
