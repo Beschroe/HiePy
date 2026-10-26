@@ -11,7 +11,7 @@ from hypothesis import strategies as st
 import hiepy
 from hiepy import HTTensor
 from tests.strategies import ht_tensors, shapes
-from tests.tolerances import assert_exact, assert_orthonormal, assert_within, magnitude
+from tests.tolerances import assert_exact, assert_orthonormal, assert_within, frobenius
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~ N1: exact factories ~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -91,24 +91,24 @@ def test_local_left_svd_matches_dense_svd(x: HTTensor):
     """N9: per node, the local vectors are orthonormal, the singular values are those of the matricization, and the
     global vectors ``U_t Û_t`` (non-root nodes) span its column space."""
     X = x.full()
-    m = magnitude(x)
+    m = frobenius(x)
     xo = hiepy.orthog(x)
     for t, (U_loc, S) in hiepy.local_left_svd(x).items():
         assert_orthonormal(U_loc, f"local vectors of node {t}")
         F, modes = _frame(xo, t)
         X_t = hiepy.matricize(X, modes)
-        assert_exact(*_padded(S, torch.linalg.svdvals(X_t)), scale=m, scale_label="m(x)")
+        assert_exact(*_padded(S, torch.linalg.svdvals(X_t)), size=m, size_label="‖x‖")
         if xo.dtree.is_root(t):
             continue  # the root frame is the tensor itself, not an orthonormal basis
         W = F @ U_loc
-        assert_within(torch.linalg.norm(X_t - W @ (W.T @ X_t)).item(), 0.0, scale=m, dtypes=(x.dtype,))
+        assert_within(torch.linalg.norm(X_t - W @ (W.T @ X_t)).item(), 0.0, size=m, dtypes=(x.dtype,))
 
 
 @given(x=ht_tensors())
 def test_gramian_eigenvalues_are_squared_singular_values(x: HTTensor):
     """N9: the eigenvalues of ``gramians(orthog(x))[t]`` are the squared singular values of the matricization."""
     X = x.full()
-    m = magnitude(x)
+    m = frobenius(x)
     xo = hiepy.orthog(x)
     for t, G in hiepy.gramians(xo).items():
         if xo.dtree.is_root(t):
@@ -116,4 +116,4 @@ def test_gramian_eigenvalues_are_squared_singular_values(x: HTTensor):
         _, modes = _frame(xo, t)
         eigenvalues = torch.linalg.eigvalsh(G).flip(0)
         squared = torch.linalg.svdvals(hiepy.matricize(X, modes)) ** 2
-        assert_exact(*_padded(eigenvalues, squared), scale=m**2, scale_label="m(x)²")
+        assert_exact(*_padded(eigenvalues, squared), size=m**2, size_label="‖x‖²")

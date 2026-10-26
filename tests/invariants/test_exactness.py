@@ -17,8 +17,8 @@ EXACT_OPS = [name for name, op in OPS.items() if op.dense is not None]
 @pytest.mark.parametrize("name", EXACT_OPS)
 @given(pair=ht_pairs(), data=st.data())
 def test_matches_dense_reference(name: str, pair: tuple[HTTensor, HTTensor], data: st.DataObject):
-    """N1, N2: the result equals the dense counterpart applied to the dense inputs, relative to the larger of the
-    reference norm and the size of the inputs entering it (``Op.magnitude``)."""
+    """N1, N2: the result equals the dense counterpart applied to the dense inputs, up to a test ratio of ``THRESH``
+    relative to the size of the inputs (``Op.input_size``)."""
     x, y = pair
     op = OPS[name]
     assert op.dense is not None
@@ -27,4 +27,4 @@ def test_matches_dense_reference(name: str, pair: tuple[HTTensor, HTTensor], dat
     actual = result.full() if isinstance(result, HTTensor) else result
     expected = op.dense(x.full(), y.full(), arg)
     dtypes = (x.dtype, y.dtype, actual.dtype)
-    assert_exact(actual, expected, scale=op.magnitude(x, y, arg), scale_label="Op.magnitude", dtypes=dtypes)
+    assert_exact(actual, expected, size=op.input_size(x, y, arg), dtypes=dtypes)

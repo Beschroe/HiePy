@@ -21,7 +21,7 @@ import hiepy
 from hiepy import HTTensor
 from hiepy.utils.data_types import IndexKey
 from tests.helpers import assert_valid_structure, make_dense_htt
-from tests.tolerances import assert_exact, magnitude
+from tests.tolerances import assert_exact, frobenius
 
 type Key = IndexKey | tuple[IndexKey, ...]
 
@@ -32,8 +32,8 @@ type Key = IndexKey | tuple[IndexKey, ...]
 def _assert_matches(result: HTTensor | torch.Tensor, expected: torch.Tensor, source: HTTensor) -> None:
     """Check result type, shape and values against the dense reference.
 
-    The values are compared relative to the size ``m(source)`` of the indexed tensor: a selected entry can be much
-    smaller than the tensor, while rounding scales with the tensor (Q7).
+    The test ratio is taken relative to the size of the input, the indexed tensor ``source`` (error model of
+    ``tests/tolerances.py``): a selected entry can be much smaller than the tensor it was computed from.
     """
     if expected.ndim >= 2:
         assert isinstance(result, HTTensor)
@@ -44,7 +44,7 @@ def _assert_matches(result: HTTensor | torch.Tensor, expected: torch.Tensor, sou
         assert not isinstance(result, HTTensor)
         dense = result
     assert dense.shape == expected.shape
-    assert_exact(dense, expected, scale=magnitude(source), scale_label="m(x)")
+    assert_exact(dense, expected, size=frobenius(source), size_label="‖x‖")
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~ Agreement with dense torch indexing ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -136,8 +136,8 @@ def test_all_entries_of_small_tensor():
 def test_entry_example_from_docstring():
     dense = torch.arange(1, 28, dtype=torch.double).reshape(3, 3, 3)
     x = hiepy.to_htt(dense, {"atol": 1e-8})
-    assert_exact(hiepy.get(x, (0, 1, 2)), torch.tensor(6.0, dtype=torch.double), scale=magnitude(x))
-    assert_exact(hiepy.get(x, (-1, -1, -1)), torch.tensor(27.0, dtype=torch.double), scale=magnitude(x))
+    assert_exact(hiepy.get(x, (0, 1, 2)), torch.tensor(6.0, dtype=torch.double), size=frobenius(x))
+    assert_exact(hiepy.get(x, (-1, -1, -1)), torch.tensor(27.0, dtype=torch.double), size=frobenius(x))
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~ Entry points ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -162,9 +162,9 @@ def test_getitem_with_comma_syntax():
 
 def test_negative_index_equals_positive_counterpart():
     _, x = make_dense_htt((3, 4, 5))
-    assert_exact(x[-1].full(), x[2].full(), scale=magnitude(x))
-    assert_exact(x[:, -4].full(), x[:, 0].full(), scale=magnitude(x))
-    assert_exact(x[-3, -4, -5], x[0, 0, 0], scale=magnitude(x))
+    assert_exact(x[-1].full(), x[2].full(), size=frobenius(x))
+    assert_exact(x[:, -4].full(), x[:, 0].full(), size=frobenius(x))
+    assert_exact(x[-3, -4, -5], x[0, 0, 0], size=frobenius(x))
 
 
 def test_index_like_integers_are_accepted():
@@ -295,9 +295,9 @@ def test_result_supports_further_operations(key: Key):
     result = hiepy.get(x, key)
     expected = dense[key]
     assert_valid_structure(result)
-    assert_exact(result.orthog().full(), expected, scale=magnitude(x))
+    assert_exact(result.orthog().full(), expected, size=frobenius(result))
     assert_exact(result.norm(), torch.linalg.norm(expected))
-    assert_exact(hiepy.contract(result, result), torch.sum(expected * expected), scale=magnitude(x) ** 2)
+    assert_exact(hiepy.contract(result, result), torch.sum(expected * expected), size=frobenius(result) ** 2)
 
 
 def test_indexing_a_non_canonical_tree():

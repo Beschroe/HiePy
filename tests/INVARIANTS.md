@@ -11,20 +11,26 @@ in [Decisions](#decisions).
 - **Frame of node t**: `U[t]` for a leaf, otherwise $(U_{t_l} \otimes U_{t_r}) \cdot \mathrm{mat}(B_t)$.
 - **Inputs**: the strategies in `tests/strategies.py` draw float32 and float64 tensors (pairs share one dtype;
   mixed precisions are covered by D2).
-- **Error model** (`tests/tolerances.py`, Q9): every numerical check has the form
-  `error ≤ bound + rel · scale`.
-  - `bound`: the mathematical bound of the invariant (0 for exact results).
-  - `rel`: relative rounding error, from the machine epsilon `ε` of the least precise dtype involved and the
-    accuracy class of the computed quantity: `SAFETY · ε` for direct computations (`SAFETY = 45`, i.e. about
-    `1e-14` in float64), `sqrt(ε)` for singular values computed from Gramian eigenvalues (`truncate_gram`), whose
-    eigenvalues are only accurate to `ε·‖x‖²` (Q5).
-  - `scale`: the size of the quantities entering the computation. For exact results the larger of `‖reference‖`
-    and the size of the inputs, e.g. `m(x) + m(y)` for `x − y`, `m(x)·m(y)` for `contract` (Q7); for approximations
-    `m(x)`; for orthonormality `‖FᵀF − I‖_F` the number of columns `k`.
-  - `m(x)`, the size of an HT tensor: the product of the spectral norms of its components (transfer tensors
-    matricized as `(r_l r_r) × r_t`). It bounds `‖x‖` and equals it for orthonormal components.
+- **Error model** (`tests/tolerances.py`, Q9, Q12), as in the LAPACK test suite: every numerical check computes
+  the *test ratio*
 
-  The only tuning knob is `SAFETY`; a failing check reports `bound`, `rel` and `scale` separately.
+  ```
+  ratio = (error − bound) / (ε · size of the inputs)   ≤   THRESH = 1000
+  ```
+
+  - `error`: the measured deviation, e.g. `‖result.full() − reference‖`.
+  - `bound`: the mathematical bound of the invariant (0 for exact results, `atol + rtol·‖x‖` for N4, `√Σσ²` for N5).
+  - `ε`: machine epsilon of the least precise dtype involved.
+  - *Size of the inputs*: the largest norm the result can have by the usual norm inequalities, with the norms of the
+    dense inputs: `‖x‖` for unary operations (`orthog`, `get`, `squeeze`, copies, truncations, …), `‖x‖ + ‖y‖` for
+    `add`/`sub`, `‖x‖·‖y‖` for `ele_mul`/`contract`, `|c|·‖x‖` for `scalar_mul`, `‖A‖·‖x‖` for `mode_mul`,
+    `max|v|·‖x‖` for `ele_mode_mul` (`tests/ops.py`, `Op.input_size`).
+  - Orthonormality as in LAPACK: `‖FᵀF − I‖_F / (k · ε) ≤ THRESH` for a frame with `k` columns.
+  - Exception: singular values from Gramian eigenvalues (`truncate_gram`) are only accurate to `√ε` times the size
+    of the inputs; there the margin is `√ε · size` instead of `THRESH · ε · size` (Q5).
+
+  What a check guarantees: every deviation larger than `THRESH · ε` (`2e-13` in float64, `1.2e-4` in float32) times
+  the size of the inputs is detected. A failing check reports the ratio and its parts.
 
 ## S – Structure
 
@@ -60,8 +66,8 @@ A wrong `True` silently breaks `norm` and `gramians`; a wrong `False` only costs
 | N1 | `result.full()` equals the dense counterpart of the operation applied to `x.full()`. | `add`, `sub`, `scalar_mul`, `mode_mul`, `ele_mode_mul`, `ele_mul` without `opts`, `orthog`, `squeeze`, `get`, `copy`, `clone`, `detach`, `to` (in the target precision); `zeros`, `ones`, `constant`, `arange` |
 | N2 | `contract(x, y)` equals `(x.full() * y.full()).sum()`; `norm(x)` equals `torch.linalg.norm(x.full())`. | `contract`, `norm` |
 | N3 | Round trips are exact: `to_htt(T, {"atol": 0}).full() ≈ T`; `load(save(x))` reproduces components, `dtree` and `is_orthog`; `dematricize ∘ matricize` and `devectorize ∘ vectorize` are the identity. | `to_htt`, `save`/`load`, `matricize`, `vectorize` |
-| N4 | **Error vs. tolerance**: `‖x.full() − result.full()‖ ≤ atol + rtol · ‖x‖` (a missing key counts as 0) if no `max_rank` is given, up to rounding of order `m(x)` (Conventions, Q5). Tested down to `atol = 1e-12·‖x‖` and `rtol = 1e-12`; `truncate_gram` and `ele_mul` only down to their resolution `sqrt(ε)` (`1e-8` in float64, `3.5e-4` in float32; Q4). | `to_htt`, `truncate_svd`, `truncate_gram`, `ele_mul` (`atol` only, E8, Q6) |
-| N5 | **Error vs. discarded singular values**: `‖x.full() − result.full()‖ ≤ sqrt(Σ_t ‖σ_t‖²)`, where `σ_t` are the returned discarded singular values, up to rounding of order `m(x)` in the accuracy class of the `σ_t` (Gramian for `truncate_gram`, Q5). Also with `max_rank`; same tolerance range as N4. | `truncate_svd`, `truncate_gram` |
+| N4 | **Error vs. tolerance**: `‖x.full() − result.full()‖ ≤ atol + rtol · ‖x‖` (a missing key counts as 0) if no `max_rank` is given, up to a test ratio of `THRESH` (Conventions, Q5). Tested down to `atol = 1e-12·‖x‖` and `rtol = 1e-12`; `truncate_gram` and `ele_mul` only down to their resolution `sqrt(ε)` (`1e-8` in float64, `3.5e-4` in float32; Q4). | `to_htt`, `truncate_svd`, `truncate_gram`, `ele_mul` (`atol` only, E8, Q6) |
+| N5 | **Error vs. discarded singular values**: `‖x.full() − result.full()‖ ≤ sqrt(Σ_t ‖σ_t‖²)`, where `σ_t` are the returned discarded singular values, up to the rounding margin of the accuracy class of the `σ_t` (Gramian for `truncate_gram`, Q5). Also with `max_rank`; same tolerance range as N4. | `truncate_svd`, `truncate_gram` |
 | N6 | `rank[t] ≤ max_rank` for every non-root node. | `to_htt`, `truncate_svd`, `truncate_gram`, `ele_mul` |
 | N7 | `orthog` does not increase any rank. | `orthog` |
 | N8 | `randn` has ranks ≤ `rank`; `hilbert` approximates `1 / (i_0 + … + i_{d−1} + d)`, with a smaller error for `M = 10` than for `M = 3`. | `randn`, `hilbert` |
@@ -126,21 +132,19 @@ Rules from CLAUDE.md ("Autograd"), covered by `tests/test_autograd.py`.
   `X_t X_tᵀ`, so singular values below about `sqrt(ε)·‖x‖` (`1e-8·‖x‖` in float64, `3.5e-4·‖x‖` in float32) cannot
   be resolved (stated in its docstring). Hence `truncate_gram` and `ele_mul`, which also selects ranks from
   Gramians, are tested only down to this resolution of the precision of the data (`tests/tolerances.py::resolution`).
-- **Q5 – Rounding margin in N4 and N5.** A margin of `SAFETY·ε · m(x)` absorbs rounding: without it, N5 failed
-  where nothing was truncated and both sides were at rounding level (`1e-15` vs. `2e-16`). It is measured in `m(x)`
-  rather than `‖x‖` because representations with cancellation produce rounding errors of order `m(x)` (Q7); for
-  orthonormal components `m(x) = ‖x‖`. N5 for `truncate_gram` uses the Gramian accuracy class `sqrt(ε) · m(x)`: its
-  discarded singular values are `sqrt(λ)` of Gramian eigenvalues with absolute error `ε·‖x‖²`, i.e. accurate only to
-  `ε·‖x‖²/σ`, at most `sqrt(ε)·‖x‖`. With the rounding class, N5 failed at `rtol = 1e-4` (excess `1.7e-13` in CI,
-  `2.3e-14` locally, for discarded singular values of order `1e-6`).
+- **Q5 – Rounding margin in N4 and N5.** The test ratio allows `THRESH · ε · ‖x‖` beyond the mathematical bound:
+  without a margin, N5 failed where nothing was truncated and both sides were at rounding level (`1e-15` vs.
+  `2e-16`). N5 for `truncate_gram` uses the Gramian accuracy class, margin `√ε · ‖x‖`: its discarded singular values
+  are `sqrt(λ)` of Gramian eigenvalues with absolute error `ε·‖x‖²`, i.e. accurate only to `ε·‖x‖²/σ`, at most
+  `√ε·‖x‖`. With the rounding margin, N5 failed at `rtol = 1e-4` (excess `1.7e-13` in CI, `2.3e-14` locally, for
+  discarded singular values of order `1e-6`).
 - **Q6 – `ele_mul` truncates conservatively (N4).** Its tolerance is enforced through an error bound for the
   Kronecker product, which is far from tight for the Hadamard product (measured errors ≈ 3 % of `atol`, ranks may
   exceed those of the exact product). Tests only check N4, not how tight the error or how small the ranks are.
-- **Q7 – Scale of exact comparisons (N1, N2).** Rounding errors scale with the size of the components, not with
-  `‖x‖`: in a representation with cancellation (e.g. a rank-deficient leaf whose columns the parent combines to a
-  small vector) `‖x‖` can be orders of magnitude smaller than the components, and `norm` deviated by `1e-13 · ‖x‖`.
-  Measured against `m(x)`, all operations stay below `1e-14` (standard bound `|fl(AB) − AB| ≲ ε‖A‖‖B‖`); for
-  orthonormal components `m(x) = ‖x‖`, so the check is as strict as before.
+- **Q7 – Compare relative to the inputs, not the result (N1, N2).** Rounding errors scale with the size of the
+  inputs, not with the result: in `x − y` with `x ≈ y`, in `⟨x, y⟩ ≈ 0`, or in a representation with cancellation
+  (a rank-deficient leaf whose columns the parent combines to a small vector, where `norm` deviated by
+  `1e-13 · ‖x‖`), the result is much smaller than the quantities it was computed from. See Q12.
 - **Q8 – Arbitrary dimension trees.** Every binary tree over the modes is supported, including unbalanced trees,
   non-contiguous nodes such as `(0, 2) | (1, 3)` and left children with larger modes than their siblings.
   `full` used to assume mode-ordered rows and returned permuted entries for such trees; this went unnoticed because
@@ -149,9 +153,7 @@ Rules from CLAUDE.md ("Autograd"), covered by `tests/test_autograd.py`.
 - **Q9 – Central error model.** Every tolerance is derived in `tests/tolerances.py` from the error model in the
   Conventions instead of being chosen per test. Before, almost every false failure came from a source of rounding
   error that a test did not model (cancellation in the operation or in the representation, Gramian accuracy, growth
-  of `‖FᵀF − I‖_F` with the number of columns, float32 data), and the fixes were scattered over several files.
-  Orthonormality is checked against `SAFETY·ε · k` (previously a constant, relaxed from `1e-14` to `1e-13` after
-  `to_htt` produced deviations up to `1.5e-14` for frames with `k = 80` columns; `orthog` stays below `2e-15`). The
+  of `‖FᵀF − I‖_F` with the number of columns, float32 data), and the fixes were scattered over several files. The
   precision is that of the least precise dtype involved, so float32 data converted to float64 is compared at float32
   accuracy.
 - **Q10 – Argument validation (E6, E9, E10).** Invalid arguments raise a clear error at the entry of an operation
@@ -164,3 +166,16 @@ Rules from CLAUDE.md ("Autograd"), covered by `tests/test_autograd.py`.
   (`left_svd_gramian`) and raise `ValueError` naming the range; before, they failed with `IndexError` or
   `LinAlgError`, or returned a result truncated against a `nan` tolerance. The range is documented in the
   docstrings; scaling the computations internally to support the full float64 range was not pursued.
+- **Q12 – Test ratio as in LAPACK.** Two approaches are common. NumPy (`assert_allclose`), PyTorch
+  (`torch.testing.assert_close`, defaults per dtype, overridden per operation in its own operator tests) and Eigen
+  (`isApprox`, documented to fail near zero) compare relative to the expected result. The LAPACK test suite computes
+  test ratios such as `‖A − QR‖ / (n·‖A‖·ε)` or `‖I − QᵀQ‖ / (n·ε)` and requires them to stay below `THRESH = 30`,
+  i.e. it compares relative to the size of the inputs. Measured on the strategy inputs (all exact operations of the
+  registry): relative to the result, errors reach `1.2e3·ε` (float64, `contract`) and `1.5e6·ε` (float32, `sub`), so
+  that approach would need exceptions per operation; relative to the size of the inputs, the ratio is at most `6` for
+  99 % of the cases and `163` at worst (float64, `norm` of a rank-deficient representation; `37` in float32).
+  Hence the LAPACK approach with `THRESH = 1000` instead of 30, because the strategies contain rank-deficient
+  representations on purpose (about 6 × room above the measured maximum). It replaced, in this order, a product of
+  the spectral norms of the components and the norm of the same computation with absolute values; both were harder
+  to explain. `tests/test_tolerances.py` checks that a relative deviation of `1e-9` (float64) or `1e-2` (float32) of
+  the size of the inputs is always detected, so the model cannot be loosened unnoticed.
